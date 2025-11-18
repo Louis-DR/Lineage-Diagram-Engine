@@ -41,18 +41,60 @@ class Lineage:
     self,
     diagram: LineageDiagram,
     color:   str,
-    path:    str,
-    width:   int,
+    start_x: float,
+    start_y: float,
+    start_w: float,
   ):
     diagram.add(self)
     self.diagram = diagram
     self.color   = color
-    self.path    = path
-    self.width   = width
+    self.start_x = start_x
+    self.start_y = start_y
+    self.start_w = start_w
+    self.transforms = []
+
+  def width_at(self, x:float) -> float:
+    return self.start_w
+
+  def shift_to(
+    self,
+    from_x: float,
+    to_x:   float,
+    to_y:   float,
+  ):
+    transform = {
+      "type":   "shift",
+      "from_x": from_x,
+      "to_x":   to_x,
+      "to_y":   to_y,
+    }
+    self.transforms.append(transform)
+
+  def get_baseline_path(self) -> svg.Path:
+    baseline_path = svg.Path()
+    start_point = complex(self.start_x, self.start_y)
+    last_point  = start_point
+    for transform in self.transforms:
+      transform_start_point = complex(transform["from_x"], last_point.imag)
+      transform_end_point   = None
+      baseline_path.append(svg.Line(last_point, transform_start_point))
+      if transform["type"] == "shift":
+        transform_end_point = complex(transform["to_x"], transform["to_y"])
+        shift_midpoint_x    = (transform_start_point.real + transform_end_point.real)/2
+        baseline_path.append(svg.CubicBezier(
+          transform_start_point,
+          complex(shift_midpoint_x, transform_start_point.imag),
+          complex(shift_midpoint_x, transform_end_point.imag),
+          transform_end_point,
+        ))
+      last_point = transform_end_point
+    end_point = complex(self.diagram.view_width, last_point.imag)
+    baseline_path.append(svg.Line(last_point, end_point))
+    return baseline_path
 
   def render(self) -> str:
 
-    baseline_path = svg.parse_path(self.path)
+    baseline_path = self.get_baseline_path()
     start_point   = baseline_path.point(0)
 
     upper_points = []
@@ -62,8 +104,8 @@ class Lineage:
       point  = baseline_path.point(t)
       normal = baseline_path.normal(t)
 
-      upper_offset = -self.width/2
-      lower_offset =  self.width/2
+      upper_offset = -self.start_w/2
+      lower_offset =  self.start_w/2
 
       upper_point = (
         point.real + upper_offset * normal.real,
@@ -87,8 +129,7 @@ class Lineage:
     return shape_svg
 
 
-
 diagram = LineageDiagram(300, 200, 100)
-lineage = Lineage(diagram, "red",  "M 0 50 h 100 c 50 0 50 50 100 50 h 100", 10)
-lineage = Lineage(diagram, "blue", "M 0 75 h 100 c 50 0 50 50 100 50 h 100", 15)
+lineage = Lineage(diagram, "red", 0, 50, 10)
+lineage.shift_to(100, 200, 150)
 diagram.render()
