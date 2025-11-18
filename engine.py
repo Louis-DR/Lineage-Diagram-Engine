@@ -3,6 +3,14 @@ import numpy        as np
 
 
 
+def smootherstep(linear:float) -> float:
+  clamped = max(0.0, min(1.0, linear))
+  squared = clamped * clamped
+  cubed   = squared * clamped
+  return cubed * (6.0 * squared - 15.0 * clamped + 10.0)
+
+
+
 class LineageDiagram:
   def __init__(
     self,
@@ -52,9 +60,7 @@ class Lineage:
     self.start_y = start_y
     self.start_w = start_w
     self.shifts  = []
-
-  def width_at(self, x:float) -> float:
-    return self.start_w
+    self.scales  = []
 
   def shift_to(
     self,
@@ -68,6 +74,36 @@ class Lineage:
       "to_y":   to_y,
     }
     self.shifts.append(shift)
+
+  def scale_to(
+    self,
+    from_x: float,
+    to_x:   float,
+    to_w:   float,
+  ):
+    scale = {
+      "from_x": from_x,
+      "to_x":   to_x,
+      "to_w":   to_w,
+    }
+    self.scales.append(scale)
+
+  def get_width_at(self, x:float) -> float:
+    last_width = self.start_w
+    for scale in self.scales:
+      if x <= scale['from_x']:
+        return last_width
+      elif scale['from_x'] < x < scale['to_x']:
+        x1 = scale['from_x']
+        x2 = scale['to_x']
+        w1 = last_width
+        w2 = scale['to_w']
+        ratio_linear = (x - x1) / (x2 - x1)
+        ratio_smooth = smootherstep(ratio_linear)
+        return w1 + (w2 - w1) * ratio_smooth
+      else:
+        last_width = scale['to_w']
+    return last_width
 
   def get_baseline_path(self) -> svg.Path:
     baseline_path = svg.Path()
@@ -101,9 +137,10 @@ class Lineage:
     for t in np.linspace(0, 1, self.diagram.resolution):
       point  = baseline_path.point(t)
       normal = baseline_path.normal(t)
+      width  = self.get_width_at(point.real)
 
-      upper_offset = -self.start_w/2
-      lower_offset =  self.start_w/2
+      upper_offset = -width/2
+      lower_offset =  width/2
 
       upper_point = (
         point.real + upper_offset * normal.real,
@@ -130,4 +167,5 @@ class Lineage:
 diagram = LineageDiagram(300, 200, 100)
 lineage = Lineage(diagram, "red", 0, 50, 10)
 lineage.shift_to(100, 200, 150)
+lineage.scale_to(100, 200,  20)
 diagram.render()
