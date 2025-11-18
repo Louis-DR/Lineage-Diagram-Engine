@@ -156,6 +156,14 @@ class LineageSegment:
     baseline_path = self.get_baseline_path()
     upper_points  = []
     lower_points  = []
+
+    # Variables for back-filtering
+    last_upper_point     = None
+    last_lower_point     = None
+    last_upper_backward  = False
+    last_lower_backward  = False
+    upper_back_filtering = False
+    lower_back_filtering = False
     # Work step by step at the configured resolution
     for t in np.linspace(0, 1, self.diagram.resolution):
       # Get parameters at this position alongside the path
@@ -163,8 +171,8 @@ class LineageSegment:
       normal = baseline_path.normal(t)
       width  = self.get_width_at(point.real)
       # Offset lines above and bellow the baseline
-      upper_offset = -width/2
-      lower_offset =  width/2
+      upper_offset =  width/2
+      lower_offset = -width/2
       # Compute the position of the points of the upper and lower edges
       upper_point = (
         point.real + upper_offset * normal.real,
@@ -174,9 +182,105 @@ class LineageSegment:
         point.real + lower_offset * normal.real,
         point.imag + lower_offset * normal.imag
       )
-      # Append to the lists
-      upper_points.append(upper_point)
-      lower_points.append(lower_point)
+
+      # Back-filtering against artifacts for tight bends
+      # When the bend is too tight and the stroke too wide, the offset line will glitch: first the
+      # offset of the flat line before the bend will continue too far, then the offset of the bend
+      # will go backward in an arc, and finally the offset line of the straigher sloped line will
+      # move forward and up, cross the first line and continue as expected. This filtering removes
+      # the backward arc and the portions of lines that are inside the stroke. It is applied on the
+      # upper and lower edges.
+
+      # Upper edge back filtering
+      # Detect if going backward
+      if len(upper_points) > 0:
+        upper_backward = upper_point[0] < last_upper_point[0]
+      else:
+        upper_backward = False
+      # If going backwards, don't add the points
+      if not upper_backward:
+        # If going forward after going backward, start back-filtering
+        if last_upper_backward:
+          upper_back_filtering = True
+        # Back filtering
+        if not upper_back_filtering:
+          upper_points.append(upper_point)
+        else:
+          # Find the Y position from the original forward line at the X of the current point
+          intersect_y = None
+          # Traverse the list of previous upper points backwards
+          for index in range(len(upper_points) - 1, -1, -1):
+            iteration_x = upper_points[index][0]
+            # Case 1: exact same X
+            if iteration_x == upper_point[0]:
+              # We have the Y directly
+              intersect_y = upper_points[index][1]
+              break
+            # Case 2: between two points
+            elif iteration_x < upper_point[0]:
+              # Interpolate for the Y
+              point_a = upper_points[index]
+              point_b = upper_points[index+1]
+              ratio   = (upper_point[0] - point_a[0]) / (point_b[0] - point_a[0])
+              intersect_y  = ratio * point_b[1] + (1 - ratio) * point_a[1]
+              break
+          # If the current point is above the previous offset line
+          if upper_point[1] < intersect_y:
+            # Then, remove the previous points with higher X, they are inside the line
+            while len(upper_points) > 0 and upper_points[-1][0] > upper_point[0]:
+              del upper_points[-1]
+            # And add the new point and return to normal operation
+            upper_points.append(upper_point)
+            upper_back_filtering = False
+      # Save state
+      last_upper_point    = upper_point
+      last_upper_backward = upper_backward
+
+      # Lower edge back filtering
+      # Detect if going backward
+      if len(lower_points) > 0:
+        lower_backward = lower_point[0] < last_lower_point[0]
+      else:
+        lower_backward = False
+      # If going backwards, don't add the points
+      if not lower_backward:
+        # If going forward after going backward, start back-filtering
+        if last_lower_backward:
+          lower_back_filtering = True
+        # Back filtering
+        if not lower_back_filtering:
+          lower_points.append(lower_point)
+        else:
+          # Find the Y position from the original forward line at the X of the current point
+          intersect_y = None
+          # Traverse the list of previous lower points backwards
+          for index in range(len(lower_points) - 1, -1, -1):
+            iteration_x = lower_points[index][0]
+            # Case 1: exact same X
+            if iteration_x == lower_point[0]:
+              # We have the Y directly
+              intersect_y = lower_points[index][1]
+              break
+            # Case 2: between two points
+            elif iteration_x < lower_point[0]:
+              # Interpolate for the Y
+              point_a = lower_points[index]
+              point_b = lower_points[index+1]
+              ratio   = (lower_point[0] - point_a[0]) / (point_b[0] - point_a[0])
+              intersect_y  = ratio * point_b[1] + (1 - ratio) * point_a[1]
+              break
+          # If the current point is under the previous offset line
+          if lower_point[1] > intersect_y:
+            # Then, remove the previous points with lower Y, they are inside the line
+            while len(lower_points) > 0 and lower_points[-1][1] < lower_point[1]:
+              del lower_points[-1]
+            # And add the new point and return to normal operation
+            lower_points.append(lower_point)
+            lower_back_filtering = False
+      # Save state
+      last_lower_point    = lower_point
+      last_lower_backward = lower_backward
+
     return (upper_points, lower_points)
 
 
@@ -257,8 +361,10 @@ class Lineage:
 
 
 
-diagram = LineageDiagram(300, 200, 100)
-lineage = Lineage(diagram, "red", 0, 50, 10)
-lineage.shift_to(100, 200, 150)
+diagram = LineageDiagram(1000, 600, 500)
+lineage = Lineage(diagram, "red", 0, 250, 10)
+lineage.shift_to(100, 200, 350)
 lineage.scale_to(100, 200,  20)
+lineage.scale_to(300, 400, 100)
+lineage.shift_to(500, 510, 100)
 diagram.render()
