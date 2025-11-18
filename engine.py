@@ -51,7 +51,7 @@ class Lineage:
     self.start_x = start_x
     self.start_y = start_y
     self.start_w = start_w
-    self.transforms = []
+    self.shifts  = []
 
   def width_at(self, x:float) -> float:
     return self.start_w
@@ -62,32 +62,30 @@ class Lineage:
     to_x:   float,
     to_y:   float,
   ):
-    transform = {
-      "type":   "shift",
+    shift = {
       "from_x": from_x,
       "to_x":   to_x,
       "to_y":   to_y,
     }
-    self.transforms.append(transform)
+    self.shifts.append(shift)
 
   def get_baseline_path(self) -> svg.Path:
     baseline_path = svg.Path()
-    start_point = complex(self.start_x, self.start_y)
-    last_point  = start_point
-    for transform in self.transforms:
-      transform_start_point = complex(transform["from_x"], last_point.imag)
-      transform_end_point   = None
-      baseline_path.append(svg.Line(last_point, transform_start_point))
-      if transform["type"] == "shift":
-        transform_end_point = complex(transform["to_x"], transform["to_y"])
-        shift_midpoint_x    = (transform_start_point.real + transform_end_point.real)/2
-        baseline_path.append(svg.CubicBezier(
-          transform_start_point,
-          complex(shift_midpoint_x, transform_start_point.imag),
-          complex(shift_midpoint_x, transform_end_point.imag),
-          transform_end_point,
-        ))
-      last_point = transform_end_point
+    start_point   = complex(self.start_x, self.start_y)
+    last_point    = start_point
+    for shift in self.shifts:
+      shift_start_point = complex(shift["from_x"], last_point.imag)
+      shift_end_point   = None
+      baseline_path.append(svg.Line(last_point, shift_start_point))
+      shift_end_point  = complex(shift["to_x"], shift["to_y"])
+      shift_midpoint_x = (shift_start_point.real + shift_end_point.real)/2
+      baseline_path.append(svg.CubicBezier(
+        shift_start_point,
+        complex(shift_midpoint_x, shift_start_point.imag),
+        complex(shift_midpoint_x, shift_end_point.imag),
+        shift_end_point,
+      ))
+      last_point = shift_end_point
     end_point = complex(self.diagram.view_width, last_point.imag)
     baseline_path.append(svg.Line(last_point, end_point))
     return baseline_path
