@@ -33,7 +33,6 @@ class LineageDiagram:
       svg_lines.append(entity.render())
     svg_lines.append('</svg>')
     svg_text = "\n".join(svg_lines)
-
     try:
       with open(filepath, 'w') as file:
         file.write(svg_text)
@@ -44,18 +43,15 @@ class LineageDiagram:
 
 
 
-class Lineage:
+class LineageSegment:
   def __init__(
     self,
     diagram: LineageDiagram,
-    color:   str,
     start_x: float,
     start_y: float,
     start_w: float,
   ):
-    diagram.add(self)
     self.diagram = diagram
-    self.color   = color
     self.start_x = start_x
     self.start_y = start_y
     self.start_w = start_w
@@ -126,22 +122,16 @@ class Lineage:
     baseline_path.append(svg.Line(last_point, end_point))
     return baseline_path
 
-  def render(self) -> str:
-
+  def render(self) -> tuple[list[complex],list[complex]]:
     baseline_path = self.get_baseline_path()
-    start_point   = baseline_path.point(0)
-
-    upper_points = []
-    lower_points = []
-
+    upper_points  = []
+    lower_points  = []
     for t in np.linspace(0, 1, self.diagram.resolution):
       point  = baseline_path.point(t)
       normal = baseline_path.normal(t)
       width  = self.get_width_at(point.real)
-
       upper_offset = -width/2
       lower_offset =  width/2
-
       upper_point = (
         point.real + upper_offset * normal.real,
         point.imag + upper_offset * normal.imag
@@ -150,18 +140,71 @@ class Lineage:
         point.real + lower_offset * normal.real,
         point.imag + lower_offset * normal.imag
       )
-
       upper_points.append(upper_point)
       lower_points.append(lower_point)
+    return (upper_points, lower_points)
 
-    shape_path = f"M {start_point.real} {start_point.imag}"
+
+
+class Lineage:
+  def __init__(
+    self,
+    diagram: LineageDiagram,
+    color:   str,
+    start_x: float,
+    start_y: float,
+    start_w: float,
+  ):
+    diagram.add(self)
+    self.diagram  = diagram
+    self.color    = color
+    self.start_x  = start_x
+    self.start_y  = start_y
+    self.start_w  = start_w
+    self.segments = [LineageSegment(
+      diagram = diagram,
+      start_x = start_x,
+      start_y = start_y,
+      start_w = start_w,
+    )]
+
+  def get_segment_at(self, x:float) -> LineageSegment:
+    return self.segments[0]
+
+  def shift_to(
+    self,
+    from_x: float,
+    to_x:   float,
+    to_y:   float,
+  ):
+    self.get_segment_at(from_x).shift_to(from_x, to_x, to_y)
+
+  def scale_to(
+    self,
+    from_x: float,
+    to_x:   float,
+    to_w:   float,
+  ):
+    self.get_segment_at(from_x).scale_to(from_x, to_x, to_w)
+
+  def get_width_at(self, x:float) -> float:
+    return self.get_segment_at(x).get_width_at(x)
+
+  def render(self) -> tuple[list[complex],list[complex]]:
+    shape_path = f"M {self.start_x} {self.start_y}"
+    upper_points = []
+    lower_points = []
+    for segment in self.segments:
+      segment_upper_points, segment_lower_points = segment.render()
+      upper_points += segment_upper_points
+      lower_points += segment_lower_points
     for upper_point in upper_points:
       shape_path += f" L {upper_point[0]} {upper_point[1]}"
     for lower_point in lower_points[::-1]:
       shape_path += f" L {lower_point[0]} {lower_point[1]}"
-
     shape_svg = f'<path fill="{self.color}" d="{shape_path}"/>'
     return shape_svg
+
 
 
 diagram = LineageDiagram(300, 200, 100)
