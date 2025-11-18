@@ -65,6 +65,7 @@ class LineageSegment:
     self.start_x = start_x
     self.start_y = start_y
     self.start_w = start_w
+    self.end_x   = diagram.view_width
     self.shifts  = [] # Y-shift transformations
     self.scales  = [] # W-scale transformations
 
@@ -93,6 +94,10 @@ class LineageSegment:
       "to_x":   to_x,
       "to_w":   to_w,
     })
+
+  def end_at(self, x:float):
+    """Set the X position of the end of the lineage."""
+    self.end_x = x
 
   def get_width_at(self, x:float) -> float:
     """Get the width of the segment at X position."""
@@ -141,8 +146,9 @@ class LineageSegment:
       # Update the last point
       last_point = shift_end_point
     # Line to the end of the segment
-    end_point = complex(self.diagram.view_width, last_point.imag)
-    baseline_path.append(svg.Line(last_point, end_point))
+    if last_point.real != self.end_x:
+      end_point = complex(self.end_x, last_point.imag)
+      baseline_path.append(svg.Line(last_point, end_point))
     return baseline_path
 
   def render(self) -> tuple[list[complex],list[complex]]:
@@ -219,6 +225,10 @@ class Lineage:
   ):
     """Scale segment to new W width over X range."""
     self.get_segment_at(from_x).scale_to(from_x, to_x, to_w)
+
+  def end_at(self, x:float):
+    """Set the X position of the end of the lineage."""
+    self.get_segment_at(x).end_at(x)
 
   def get_width_at(self, x:float) -> float:
     """Get the width of the segment at X position."""
