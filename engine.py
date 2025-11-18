@@ -17,11 +17,11 @@ class LineageDiagram:
   """Diagram of lineages."""
 
   def __init__(
-    self,
-    view_width:  int,
-    view_height: int,
-    resolution:  int = 1000,
-  ):
+      self,
+      view_width:  int,
+      view_height: int,
+      resolution:  int = 1000,
+    ):
     self.view_width  = view_width
     self.view_height = view_height
     self.resolution  = resolution
@@ -55,12 +55,12 @@ class LineageDiagram:
 class LineageSegment:
   """Continuous segment of lineage."""
   def __init__(
-    self,
-    diagram: LineageDiagram,
-    start_x: float,
-    start_y: float,
-    start_w: float,
-  ):
+      self,
+      diagram: LineageDiagram,
+      start_x: float,
+      start_y: float,
+      start_w: float,
+    ):
     self.diagram = diagram
     self.start_x = start_x
     self.start_y = start_y
@@ -70,11 +70,11 @@ class LineageSegment:
     self.scales  = [] # W-scale transformations
 
   def shift_to(
-    self,
-    from_x: float,
-    to_x:   float,
-    to_y:   float,
-  ):
+      self,
+      from_x: float,
+      to_x:   float,
+      to_y:   float,
+    ):
     """Shift segment to new Y position over X range."""
     self.shifts.append({
       "from_x": from_x,
@@ -83,11 +83,11 @@ class LineageSegment:
     })
 
   def scale_to(
-    self,
-    from_x: float,
-    to_x:   float,
-    to_w:   float,
-  ):
+      self,
+      from_x: float,
+      to_x:   float,
+      to_w:   float,
+    ):
     """Scale segment to new W width over X range."""
     self.scales.append({
       "from_x": from_x,
@@ -156,7 +156,6 @@ class LineageSegment:
     baseline_path = self.get_baseline_path()
     upper_points  = []
     lower_points  = []
-
     # Variables for back-filtering
     last_upper_point     = None
     last_lower_point     = None
@@ -288,13 +287,13 @@ class LineageSegment:
 class Lineage:
   """Lineage made of segments."""
   def __init__(
-    self,
-    diagram: LineageDiagram,
-    color:   str,
-    start_x: float,
-    start_y: float,
-    start_w: float,
-  ):
+      self,
+      diagram: LineageDiagram,
+      color:   str,
+      start_x: float,
+      start_y: float,
+      start_w: float,
+    ):
     diagram.add(self)
     self.diagram  = diagram
     self.color    = color
@@ -313,20 +312,20 @@ class Lineage:
     return self.segments[0]
 
   def shift_to(
-    self,
-    from_x: float,
-    to_x:   float,
-    to_y:   float,
-  ):
+      self,
+      from_x: float,
+      to_x:   float,
+      to_y:   float,
+    ):
     """Shift segment to new Y position over X range."""
     self.get_segment_at(from_x).shift_to(from_x, to_x, to_y)
 
   def scale_to(
-    self,
-    from_x: float,
-    to_x:   float,
-    to_w:   float,
-  ):
+      self,
+      from_x: float,
+      to_x:   float,
+      to_w:   float,
+    ):
     """Scale segment to new W width over X range."""
     self.get_segment_at(from_x).scale_to(from_x, to_x, to_w)
 
@@ -361,10 +360,8 @@ class Lineage:
 
 
 
-diagram = LineageDiagram(1000, 600, 500)
+diagram = LineageDiagram(600, 600, 500)
 lineage = Lineage(diagram, "red", 0, 250, 10)
 lineage.shift_to(100, 200, 350)
 lineage.scale_to(100, 200,  20)
-lineage.scale_to(300, 400, 100)
-lineage.shift_to(500, 510, 100)
 diagram.render()
