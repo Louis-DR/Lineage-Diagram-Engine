@@ -28,17 +28,17 @@ class LineageDiagram:
     self.entities    = []
 
   def add(self, entity):
-    """Add renderable entity to the diagram."""
+    """Add compileable entity to the diagram."""
     self.entities.append(entity)
 
-  def render(self, filepath:str="diagram.svg"):
-    """Render the diagram to an SVG file."""
+  def generate(self, filepath:str="diagram.svg"):
+    """Generate the diagram to an SVG file."""
     svg_lines = []
     # Open SVG tag
     svg_lines.append(f'<svg width="{self.view_width}" height="{self.view_height}" viewBox="0 0 {self.view_width} {self.view_height}" xmlns="http://www.w3.org/2000/svg">')
-    # Render each diagram entity
+    # Draw each diagram entity
     for entity in self.entities:
-      svg_lines.append(entity.render())
+      svg_lines.append(entity.draw())
     # Close SVG tag
     svg_lines.append('</svg>')
     # Write the SVG file
@@ -51,36 +51,24 @@ class LineageDiagram:
 
 
 
-
 class LineageSegment:
-  """Continuous segment of lineage."""
+  """Base class for continuous segment of lineage."""
   def __init__(
       self,
       diagram: LineageDiagram,
       start_x: float,
-      start_y: float,
       start_w: float,
+      end_x:   float = None
     ):
     self.diagram = diagram
     self.start_x = start_x
-    self.start_y = start_y
     self.start_w = start_w
-    self.end_x   = diagram.view_width
-    self.shifts  = [] # Y-shift transformations
-    self.scales  = [] # W-scale transformations
+    self.end_x   = end_x or diagram.view_width
+    self.scales  = []
 
-  def shift_to(
-      self,
-      from_x: float,
-      to_x:   float,
-      to_y:   float,
-    ):
-    """Shift segment to new Y position over X range."""
-    self.shifts.append({
-      "from_x": from_x,
-      "to_x":   to_x,
-      "to_y":   to_y,
-    })
+  def end_at(self, x:float):
+    """Set the X position of the end of the lineage."""
+    self.end_x = x
 
   def scale_to(
       self,
@@ -94,10 +82,6 @@ class LineageSegment:
       "to_x":   to_x,
       "to_w":   to_w,
     })
-
-  def end_at(self, x:float):
-    """Set the X position of the end of the lineage."""
-    self.end_x = x
 
   def get_width_at(self, x:float) -> float:
     """Get the width of the segment at X position."""
@@ -122,6 +106,35 @@ class LineageSegment:
         last_width = scale['to_w']
     # Reached the end, return width of last transformation
     return last_width
+
+
+
+class IndependantLineageSegment(LineageSegment):
+  """Lineage segment independant of lineage strutures and with its own compile algorithm."""
+  def __init__(
+      self,
+      diagram: LineageDiagram,
+      start_x: float,
+      start_y: float,
+      start_w: float,
+      end_x:   float = None
+    ):
+    LineageSegment.__init__(self, diagram, start_x, start_w, end_x)
+    self.start_y = start_y
+    self.shifts  = []
+
+  def shift_to(
+      self,
+      from_x: float,
+      to_x:   float,
+      to_y:   float,
+    ):
+    """Shift segment to new Y position over X range."""
+    self.shifts.append({
+      "from_x": from_x,
+      "to_x":   to_x,
+      "to_y":   to_y,
+    })
 
   def get_baseline_path(self) -> svg.Path:
     """Generate the baseline SVG path of the segment."""
@@ -151,8 +164,8 @@ class LineageSegment:
       baseline_path.append(svg.Line(last_point, end_point))
     return baseline_path
 
-  def render(self) -> tuple[list[complex],list[complex]]:
-    """Render the segment and return the lists of upper and lower points of the shape."""
+  def compile(self) -> tuple[list[complex],list[complex]]:
+    """Compile the segment and return the lists of upper and lower points of the shape."""
     baseline_path = self.get_baseline_path()
     upper_points  = []
     lower_points  = []
@@ -284,6 +297,24 @@ class LineageSegment:
 
 
 
+class DependantLineageSegment(LineageSegment):
+  """Lineage segment dependent of a lineage struture for its compileing."""
+  def __init__(
+      self,
+      diagram: LineageDiagram,
+      start_x: float,
+      start_w: float,
+      end_x:   float = None
+    ):
+    LineageSegment.__init__(self, diagram, start_x, start_w, end_x)
+    self.upper_points = []
+    self.lower_points = []
+
+  def compile(self) -> tuple[list[complex],list[complex]]:
+    return (self.upper_points, self.lower_points)
+
+
+
 class Lineage:
   """Lineage made of segments."""
   def __init__(
@@ -300,7 +331,7 @@ class Lineage:
     self.start_x  = start_x
     self.start_y  = start_y
     self.start_w  = start_w
-    self.segments = [LineageSegment(
+    self.segments = [IndependantLineageSegment(
       diagram = diagram,
       start_x = start_x,
       start_y = start_y,
@@ -309,7 +340,11 @@ class Lineage:
 
   def get_segment_at(self, x:float) -> LineageSegment:
     """Get segment at X position."""
-    return self.segments[0]
+    for segment in self.segments:
+      if segment.start_x <= x <= segment.end_x:
+        return segment
+    print(f"ERROR: No segment at {x=} for this lineage.")
+    return None
 
   def shift_to(
       self,
@@ -333,19 +368,46 @@ class Lineage:
     """Set the X position of the end of the lineage."""
     self.get_segment_at(x).end_at(x)
 
+  def join(
+      self,
+      from_x:      float,
+      to_x:        float,
+      to_assembly: "LineageAssembly",
+    ):
+    current_segment = self.get_segment_at(to_x)
+    width_at_to_x   = current_segment.get_width_at(to_x)
+    segment_end_x   = current_segment.end_x
+    current_segment.end_at(to_x)
+    created_segment = DependantLineageSegment(
+      diagram = self.diagram,
+      start_x = to_x,
+      start_w = width_at_to_x,
+      end_x   = segment_end_x,
+    )
+    self.segments.append(created_segment)
+    to_assembly.add_member(
+      from_x  = from_x,
+      to_x    = to_x,
+      lineage = self,
+    )
+
   def get_width_at(self, x:float) -> float:
     """Get the width of the segment at X position."""
     return self.get_segment_at(x).get_width_at(x)
 
-  def render(self) -> tuple[list[complex],list[complex]]:
-    """Render the lineage and return the SVG element of the shape."""
+  @property
+  def end_x(self):
+    return self.segments[-1].end_x
+
+  def draw(self) -> tuple[list[complex],list[complex]]:
+    """Draw the lineage and return the SVG element of the shape."""
     # Start the shape at the start point
     shape_path = f"M {self.start_x} {self.start_y}"
     # Combine the lists of upper and lower points from the segments
     upper_points = []
     lower_points = []
     for segment in self.segments:
-      segment_upper_points, segment_lower_points = segment.render()
+      segment_upper_points, segment_lower_points = segment.compile()
       upper_points += segment_upper_points
       lower_points += segment_lower_points
     # Shape is clock-wise starting with the upper points from left to right
@@ -360,8 +422,140 @@ class Lineage:
 
 
 
-diagram = LineageDiagram(600, 600, 500)
-lineage = Lineage(diagram, "red", 0, 250, 10)
-lineage.shift_to(100, 200, 350)
-lineage.scale_to(100, 200,  20)
-diagram.render()
+class LineageAssembly:
+  """Base class for assembly of lineages"""
+
+class LineageBundle(LineageAssembly):
+  """Bundle of lineages."""
+  def __init__(
+      self,
+      diagram: LineageDiagram,
+      start_x: float,
+      start_y: float,
+      margin:  float,
+    ):
+    self.diagram = diagram
+    self.start_x = start_x
+    self.start_y = start_y
+    self.margin  = margin
+    self.shifts  = [] # Y-shift transformations
+    self.members = []
+
+  def add_member(
+      self,
+      from_x:  float,
+      to_x:    float,
+      lineage: Lineage
+    ):
+    self.members.append({
+      "from_x":  to_x,
+      "to_x":    lineage.end_x,
+      "lineage": lineage,
+    })
+
+  def shift_to(
+      self,
+      from_x: float,
+      to_x:   float,
+      to_y:   float,
+    ):
+    """Shift segment to new Y position over X range."""
+    self.shifts.append({
+      "from_x": from_x,
+      "to_x":   to_x,
+      "to_y":   to_y,
+    })
+
+  def get_baseline_path(self) -> svg.Path:
+    """Generate the baseline SVG path of the bundle."""
+    baseline_path = svg.Path()
+    start_point   = complex(self.start_x, self.start_y)
+    last_point    = start_point
+    # Iterate over shift transformation
+    for shift in self.shifts:
+      shift_start_point = complex(shift["from_x"], last_point.imag)
+      # Add line from end end of the previous transformation to the start of this one
+      baseline_path.append(svg.Line(last_point, shift_start_point))
+      # Compute control points
+      shift_end_point  = complex(shift["to_x"], shift["to_y"])
+      shift_midpoint_x = (shift_start_point.real + shift_end_point.real)/2
+      # Add cubic Bezier curve corresponding to the shift transformation
+      baseline_path.append(svg.CubicBezier(
+        shift_start_point,
+        complex(shift_midpoint_x, shift_start_point.imag),
+        complex(shift_midpoint_x, shift_end_point.imag),
+        shift_end_point,
+      ))
+      # Update the last point
+      last_point = shift_end_point
+    # Line to the end of the view port
+    end_point = complex(self.diagram.view_width, last_point.imag)
+    baseline_path.append(svg.Line(last_point, end_point))
+    return baseline_path
+
+  def get_members_at(self, x:float) -> Lineage:
+    """Get list of lineage members at X position."""
+    members_at_x = []
+    for member in self.members:
+      if member["from_x"] <= x <= member["to_x"]:
+        members_at_x.append(member["lineage"])
+    return members_at_x
+
+  def compile(self):
+    baseline_path = self.get_baseline_path()
+    # Work step by step at the configured resolution
+    for t in np.linspace(0, 1, self.diagram.resolution):
+      # Get parameters at this position alongside the path
+      point   = baseline_path.point(t)
+      normal  = baseline_path.normal(t)
+      members = self.get_members_at(point.real)
+      bundle_width = sum([member.get_width_at(point.real) for member in members]) + self.margin * (len(members) - 1)
+      upper_offset = -bundle_width/2
+      lower_offset = None
+      for member in members:
+        member_segment = member.get_segment_at(point.real)
+        member_width   = member_segment.get_width_at(point.real)
+        lower_offset   = upper_offset + member_width
+        member_upper_point = (
+          point.real + upper_offset * normal.real,
+          point.imag + upper_offset * normal.imag
+        )
+        member_lower_point = (
+          point.real + lower_offset * normal.real,
+          point.imag + lower_offset * normal.imag
+        )
+        member_segment.upper_points.append(member_upper_point)
+        member_segment.lower_points.append(member_lower_point)
+        upper_offset += member_width + self.margin
+
+
+
+diagram = LineageDiagram(
+  view_width  = 1600,
+  view_height = 500,
+  resolution  = 500,
+)
+
+lineage_r = Lineage(diagram, color="indianred", start_x=0, start_y=50, start_w=10)
+lineage_r.shift_to(from_x=100, to_x=200, to_y=150)
+lineage_r.scale_to(from_x=100, to_x=200, to_w=20)
+
+lineage_b = Lineage(diagram, color="steelblue",    start_x=0, start_y=200, start_w=10)
+lineage_g = Lineage(diagram, color="darkseagreen", start_x=0, start_y=250, start_w=10)
+
+bundle = LineageBundle(diagram, start_x=0, start_y=300, margin=5)
+lineage_r.join(from_x=300, to_x=350, to_assembly=bundle)
+lineage_b.join(from_x=350, to_x=400, to_assembly=bundle)
+lineage_g.join(from_x=400, to_x=450, to_assembly=bundle)
+
+lineage_r.scale_to(from_x=500, to_x=550, to_w=10)
+lineage_b.scale_to(from_x=550, to_x=600, to_w=20)
+lineage_g.scale_to(from_x=600, to_x=650, to_w=20)
+lineage_b.scale_to(from_x=700, to_x=800, to_w=10)
+lineage_g.scale_to(from_x=700, to_x=800, to_w=10)
+
+bundle.shift_to(from_x=850, to_x=950, to_y=200)
+
+bundle.compile()
+
+diagram.generate()
