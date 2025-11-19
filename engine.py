@@ -110,7 +110,7 @@ class LineageSegment:
 
 
 class IndependantLineageSegment(LineageSegment):
-  """Lineage segment independant of lineage strutures and with its own compile algorithm."""
+  """Lineage segment independant of lineage assemblies and with its own compile algorithm."""
   def __init__(
       self,
       diagram: LineageDiagram,
@@ -298,7 +298,7 @@ class IndependantLineageSegment(LineageSegment):
 
 
 class DependantLineageSegment(LineageSegment):
-  """Lineage segment dependent of a lineage struture for its compileing."""
+  """Lineage segment dependent of a lineage assembly for its compilation."""
   def __init__(
       self,
       diagram: LineageDiagram,
@@ -311,6 +311,7 @@ class DependantLineageSegment(LineageSegment):
     self.lower_points = []
 
   def compile(self) -> tuple[list[complex],list[complex]]:
+    """Return the list of points that were compiled by the assembly."""
     return (self.upper_points, self.lower_points)
 
 
@@ -374,34 +375,45 @@ class Lineage:
       to_x:        float,
       to_assembly: "LineageAssembly",
     ):
+    """Join an assembly."""
+    # Get the segment at the join position
     current_segment = self.get_segment_at(to_x)
     width_at_to_x   = current_segment.get_width_at(to_x)
     segment_end_x   = current_segment.end_x
+    # Cut the current segment
     current_segment.end_at(to_x)
+    # Create new segment dependant of the assembly
     created_segment = DependantLineageSegment(
       diagram = self.diagram,
       start_x = to_x,
       start_w = width_at_to_x,
       end_x   = segment_end_x,
     )
+    # Register the new segment in this lineage and in the assembly
     self.segments.append(created_segment)
     to_assembly.add_member(
       from_x  = from_x,
       to_x    = to_x,
       lineage = self,
     )
+    # ToDo add a shift from the current position at from_x outside the bundle to the new position at to_x inside the bundle to connect the two segments
 
   def leave(
       self,
       from_x:        float,
       to_x:          float,
       from_assembly: "LineageAssembly",
+      to_y:          float
     ):
+    """Leave an assembly."""
+    # Get the segment at the leave position
     current_segment = self.get_segment_at(from_x)
     width_at_from_x = current_segment.get_width_at(from_x)
     segment_end_x   = current_segment.end_x
-    segment_start_y = from_assembly.start_y # ToDo implemnet
+    segment_start_y = to_y
+    # Cut the current segment
     current_segment.end_at(from_x)
+    # Create new segment independant of the assembly
     created_segment = IndependantLineageSegment(
       diagram = self.diagram,
       start_x = from_x,
@@ -409,12 +421,14 @@ class Lineage:
       start_w = width_at_from_x,
       end_x   = segment_end_x,
     )
+    # Register the new segment in this lineage and in the assembly
     self.segments.append(created_segment)
     from_assembly.remove_member(
       from_x  = from_x,
       to_x    = to_x,
       lineage = self,
     )
+    # ToDo add a shift from the current position at from_x inside the bundle to the new position at to_x outside the bundle to connect the two segments
 
   def get_width_at(self, x:float) -> float:
     """Get the width of the segment at X position."""
@@ -463,7 +477,7 @@ class LineageBundle(LineageAssembly):
     self.start_x = start_x
     self.start_y = start_y
     self.margin  = margin
-    self.shifts  = [] # Y-shift transformations
+    self.shifts  = []
     self.members = []
 
   def add_member(
@@ -472,11 +486,14 @@ class LineageBundle(LineageAssembly):
       to_x:    float,
       lineage: Lineage
     ):
+    """Add a member lineage."""
+    # Lineage is member from the end of the transition
     self.members.append({
       "from_x":  to_x,
       "to_x":    lineage.end_x,
       "lineage": lineage,
     })
+    # ToDo implement smooth transition before member is actually in : invisible placeholder grows from 0 to width+margin
 
   def remove_member(
       self,
@@ -484,9 +501,13 @@ class LineageBundle(LineageAssembly):
       to_x:    float,
       lineage: Lineage
     ):
+    """Remove a member lineage."""
+    # Find the membership descriptor
     for member in self.get_members_at(from_x):
       if member["lineage"] == lineage:
+        # End its membership at the start of the transition
         member["to_x"] = from_x
+    # ToDo implement smooth transition after member is actually out : invisible placeholder grows from width+margin to 0
 
   def shift_to(
       self,
@@ -537,6 +558,7 @@ class LineageBundle(LineageAssembly):
     return members_at_x
 
   def compile(self):
+    """Compile the paths of the members' segments"""
     baseline_path = self.get_baseline_path()
     # Work step by step at the configured resolution
     for t in np.linspace(0, 1, self.diagram.resolution):
@@ -544,14 +566,20 @@ class LineageBundle(LineageAssembly):
       point   = baseline_path.point(t)
       normal  = baseline_path.normal(t)
       members = self.get_members_at(point.real)
+      # Total width of the bundle to center the segments
       bundle_width = sum([member["lineage"].get_width_at(point.real) for member in members]) + self.margin * (len(members) - 1)
+      # Initial offset, start at the top
       upper_offset = -bundle_width/2
       lower_offset = None
+      # Iterate over members in order
       for member in members:
+        # Get member lineage and segment
         member_lineage = member["lineage"]
         member_segment = member_lineage.get_segment_at(point.real)
+        # Update the offset with the member width
         member_width   = member_segment.get_width_at(point.real)
         lower_offset   = upper_offset + member_width
+        # Compute the points of the upper and lower edges of the path
         member_upper_point = (
           point.real + upper_offset * normal.real,
           point.imag + upper_offset * normal.imag
@@ -560,11 +588,17 @@ class LineageBundle(LineageAssembly):
           point.real + lower_offset * normal.real,
           point.imag + lower_offset * normal.imag
         )
+        # Add the points to the segment of the member lineage
         member_segment.upper_points.append(member_upper_point)
         member_segment.lower_points.append(member_lower_point)
+        # Update the upper offset with the member width and the margin
         upper_offset += member_width + self.margin
 
 
+
+
+
+# Example
 
 diagram = LineageDiagram(
   view_width  = 1600,
@@ -592,7 +626,7 @@ lineage_g.scale_to(from_x=700, to_x=800, to_w=10)
 
 bundle.shift_to(from_x=850, to_x=950, to_y=200)
 
-lineage_b.leave(from_x=1000, to_x=1050, from_assembly=bundle)
+lineage_b.leave(from_x=1000, to_x=1050, from_assembly=bundle, to_y=50)
 
 bundle.compile()
 
