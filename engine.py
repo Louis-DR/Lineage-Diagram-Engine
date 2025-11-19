@@ -391,6 +391,31 @@ class Lineage:
       lineage = self,
     )
 
+  def leave(
+      self,
+      from_x:        float,
+      to_x:          float,
+      from_assembly: "LineageAssembly",
+    ):
+    current_segment = self.get_segment_at(from_x)
+    width_at_from_x = current_segment.get_width_at(from_x)
+    segment_end_x   = current_segment.end_x
+    segment_start_y = from_assembly.start_y # ToDo implemnet
+    current_segment.end_at(from_x)
+    created_segment = IndependantLineageSegment(
+      diagram = self.diagram,
+      start_x = from_x,
+      start_y = segment_start_y,
+      start_w = width_at_from_x,
+      end_x   = segment_end_x,
+    )
+    self.segments.append(created_segment)
+    from_assembly.remove_member(
+      from_x  = from_x,
+      to_x    = to_x,
+      lineage = self,
+    )
+
   def get_width_at(self, x:float) -> float:
     """Get the width of the segment at X position."""
     return self.get_segment_at(x).get_width_at(x)
@@ -453,6 +478,16 @@ class LineageBundle(LineageAssembly):
       "lineage": lineage,
     })
 
+  def remove_member(
+      self,
+      from_x:  float,
+      to_x:    float,
+      lineage: Lineage
+    ):
+    for member in self.get_members_at(from_x):
+      if member["lineage"] == lineage:
+        member["to_x"] = from_x
+
   def shift_to(
       self,
       from_x: float,
@@ -498,7 +533,7 @@ class LineageBundle(LineageAssembly):
     members_at_x = []
     for member in self.members:
       if member["from_x"] <= x <= member["to_x"]:
-        members_at_x.append(member["lineage"])
+        members_at_x.append(member)
     return members_at_x
 
   def compile(self):
@@ -509,11 +544,12 @@ class LineageBundle(LineageAssembly):
       point   = baseline_path.point(t)
       normal  = baseline_path.normal(t)
       members = self.get_members_at(point.real)
-      bundle_width = sum([member.get_width_at(point.real) for member in members]) + self.margin * (len(members) - 1)
+      bundle_width = sum([member["lineage"].get_width_at(point.real) for member in members]) + self.margin * (len(members) - 1)
       upper_offset = -bundle_width/2
       lower_offset = None
       for member in members:
-        member_segment = member.get_segment_at(point.real)
+        member_lineage = member["lineage"]
+        member_segment = member_lineage.get_segment_at(point.real)
         member_width   = member_segment.get_width_at(point.real)
         lower_offset   = upper_offset + member_width
         member_upper_point = (
@@ -555,6 +591,8 @@ lineage_b.scale_to(from_x=700, to_x=800, to_w=10)
 lineage_g.scale_to(from_x=700, to_x=800, to_w=10)
 
 bundle.shift_to(from_x=850, to_x=950, to_y=200)
+
+lineage_b.leave(from_x=1000, to_x=1050, from_assembly=bundle)
 
 bundle.compile()
 
