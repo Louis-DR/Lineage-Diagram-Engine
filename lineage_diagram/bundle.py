@@ -1,10 +1,10 @@
 import numpy        as np
 
 from dataclasses import dataclass
-from typing      import TYPE_CHECKING
+from typing      import TYPE_CHECKING, Any
 
 from .paths      import ShiftablePath, ShiftEvent
-from .utils      import find_t_at_x
+from .utils      import find_t_at_x, smootherstep
 
 if TYPE_CHECKING:
   from .diagram import Diagram
@@ -12,9 +12,11 @@ if TYPE_CHECKING:
 
 @dataclass
 class BundleMembership:
-  from_x:  float
-  to_x:    float
-  lineage: "Lineage"
+  lineage:           "Lineage"
+  start_x:           float
+  end_x:             float
+  fade_in_duration:  float = 0.0
+  fade_out_duration: float = 0.0
 
 class Bundle(ShiftablePath):
   def __init__(
@@ -39,12 +41,20 @@ class Bundle(ShiftablePath):
   def end_x(self) -> float:
     return self.diagram.view_width
 
-  def add_member(self, from_x:float, to_x:float, lineage:"Lineage"):
+  def add_member(
+      self,
+      lineage:          "Lineage",
+      start_x:          float,
+      end_x:            float,
+      fade_in_duration: float = 0.0
+    ):
     """Add a member lineage to bundle."""
     self.memberships.append(BundleMembership(
-      from_x  = from_x,
-      to_x    = to_x,
-      lineage = lineage,
+      lineage           = lineage,
+      start_x           = start_x,
+      end_x             = end_x,
+      fade_in_duration  = fade_in_duration,
+      fade_out_duration = 0.0 # Will be set when/if the lineage leaves
     ))
 
   def shift_to(self, from_x:float, to_x:float, to_y:float):
@@ -55,9 +65,58 @@ class Bundle(ShiftablePath):
       to_y   = to_y,
     ))
 
-  def get_memberships_at(self, x:float):
-    """Return memberships active at X, sorted by some criteria (currently insertion order)."""
-    return [membership for membership in self.memberships if membership.from_x <= x <= membership.to_x]
+  def get_memberships_at(self, x:float) -> list[BundleMembership]:
+    """Return memberships active at X, sorted by insertion order."""
+    return [membership for membership in self.memberships if membership.start_x <= x <= membership.end_x]
+
+  def _get_factor(self, membership:BundleMembership, x:float) -> float:
+    """Calculate the presence factor (0 to 1) of a member at position X."""
+    # Fade In
+    if x < membership.start_x + membership.fade_in_duration:
+      if membership.fade_in_duration <= 1e-5: return 1.0
+      ratio = (x - membership.start_x) / membership.fade_in_duration
+      return smootherstep(ratio)
+    # Fade Out
+    elif x > membership.end_x - membership.fade_out_duration:
+      if membership.fade_out_duration <= 1e-5: return 1.0
+      start_fade_out = membership.end_x - membership.fade_out_duration
+      ratio = (x - start_fade_out) / membership.fade_out_duration
+      return 1.0 - smootherstep(ratio)
+    # Stable
+    return 1.0
+
+  def _calculate_layout(self, memberships:list[BundleMembership], x:float) -> tuple[list[float],list]:
+    """Calculate widths and margins for all members at X to ensure smooth transitions."""
+    factors = [self._get_factor(membership, x) for membership in memberships]
+    # Calculate effective widths (lineage width scaled by factor)
+    effective_widths = [membership.lineage.get_width_at(x) * factor for membership, factor in zip(memberships, factors)]
+    # Create the array of gaps
+    count = len(memberships)
+    gaps  = []
+    if count > 1:
+      # Initial gaps: each member contributes half a margin multiplied by their presense factors
+      for index in range(count - 1):
+        gaps.append(0.5 * self.margin * (factors[index] + factors[index+1]))
+      # Edge correction: The "average" formula assumes neighbors exist on both sides
+      # and are fully present (factor 1.0). We must remove the margin allocated to
+      # the empty space at the start and end.
+      start_excess = 0.5 * self.margin * (1.0 - factors[0])
+      end_excess   = 0.5 * self.margin * (1.0 - factors[-1])
+      # Apply start correction (bottom to top)
+      for index in range(len(gaps)):
+        if start_excess <= 1e-5: break
+        correction    = min(gaps[index], start_excess)
+        gaps[index]  -= correction
+        start_excess -= correction
+      # Apply end correction (top to bottom)
+      for index in range(len(gaps)-1, -1, -1):
+        if end_excess <= 1e-5: break
+        correction  = min(gaps[index], end_excess)
+        gaps[index] -= correction
+        end_excess  -= correction
+      # Add a zero to make the list lengths match
+      gaps.append(0)
+    return effective_widths, gaps
 
   def solve_geometry(self):
     """Pre-calculate baseline and stacking for the whole duration."""
@@ -72,13 +131,14 @@ class Bundle(ShiftablePath):
       x      = point.real
       memberships = self.get_memberships_at(x)
       if not memberships: continue
+      # Get the widths and gaps
+      widths, gaps = self._calculate_layout(memberships, x)
       # Total bundle width
-      member_widths = [membership.lineage.get_width_at(x) for membership in memberships]
-      bundle_width  = sum(member_widths) + self.margin * (len(memberships) - 1)
+      bundle_width = sum(widths) + sum(gaps)
       # Initial offset, start at the top
       current_offset = -bundle_width / 2
       # Iterate over members in order
-      for membership, member_width in zip(memberships, member_widths):
+      for membership, member_width, member_gap in zip(memberships, widths, gaps):
         # Offset lines of this member
         upper_offset = current_offset + member_width
         lower_offset = current_offset
@@ -89,7 +149,7 @@ class Bundle(ShiftablePath):
         self.compiled_member_points[membership.lineage][0].append(upper_point)
         self.compiled_member_points[membership.lineage][1].append(lower_point)
         # Update bundle offset
-        current_offset += member_width + self.margin
+        current_offset += member_width + member_gap
 
   def get_center_point_of_member_at(self, x:float, lineage:"Lineage") -> complex:
     """Finds the geometric center of the lineage within the bundle at position X."""
@@ -100,19 +160,20 @@ class Bundle(ShiftablePath):
     point          = baseline_path.point(t)
     normal         = baseline_path.normal(t)
     memberships    = self.get_memberships_at(x)
+    # Get the widths and gaps
+    widths, gaps   = self._calculate_layout(memberships, x)
     # Total bundle width
-    member_widths  = [membership.lineage.get_width_at(x) for membership in memberships]
-    bundle_width   = sum(member_widths) + self.margin * (len(memberships) - 1)
+    bundle_width   = sum(widths) + sum(gaps)
     # Initial offset, start at the top
     current_offset = -bundle_width / 2
     # Iterate over members in order
-    for membership, member_width in zip(memberships, member_widths):
+    for membership, member_width, member_gap in zip(memberships, widths, gaps):
       # If found the requested lineage
       if membership.lineage == lineage:
         # Then return the position of its center
         return point + normal * (current_offset + member_width/2)
       # Else update the bundle offset
-      current_offset += member_width + self.margin
+      current_offset += member_width + member_gap
     # Lineage not found, fallback to bundle center
     print(f"ERROR: Lineage not found in bundle at {x=}.")
     return point

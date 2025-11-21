@@ -41,18 +41,24 @@ class Lineage(ScalablePath):
   def join(self, from_x:float, to_x:float, to_assembly:"Bundle"):
     """Join assembly over a transition X range."""
     self.membership_events.append(MembershipEvent(from_x, to_x, MembershipEventType.JOIN, assembly=to_assembly))
-    # Inform the assembly of the new member
-    # ToDo how to implement the lineage ending
-    to_assembly.add_member(to_x, 99999, self) # 99999 is placeholder end
+    # Inform the assembly of the new member.
+    # The lineage starts entering at from_x, and is fully inside at to_x.
+    to_assembly.add_member(
+      lineage          = self,
+      start_x          = from_x,
+      end_x            = 99999, # Placeholder end
+      fade_in_duration = to_x - from_x
+    )
 
   def leave(self, from_x:float, to_x:float, from_assembly:"Bundle", to_y:float):
     """Leave assembly over a transition X range."""
     self.membership_events.append(MembershipEvent(from_x, to_x, MembershipEventType.LEAVE, assembly=from_assembly, target_y=to_y))
-    # Update assembly membership
+    # Update assembly membership.
+    # The lineage starts leaving at from_x and is fully gone at to_x.
     for membership in from_assembly.memberships:
-      # Find the membership for that lineage that matches the X position
-      if membership.lineage == self and membership.from_x <= from_x <= membership.to_x:
-        membership.to_x = from_x
+      if membership.lineage == self and membership.start_x <= from_x <= membership.end_x:
+        membership.end_x             = to_x
+        membership.fade_out_duration = to_x - from_x
         break
 
   def compile_segments(self):
