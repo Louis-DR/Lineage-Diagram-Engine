@@ -29,6 +29,35 @@ class Lineage(ScalablePath):
     self.scale_events:      list[ScaleEvent]      = []
     # Computed segments
     self.computed_segments = []
+    # Internal state for compilation
+    self._initial_bundle = None
+
+  @classmethod
+  def create_in_bundle(
+      cls,
+      diagram:          "Diagram",
+      color:            str,
+      start_x:          float,
+      start_w:          float,
+      in_bundle:        "Bundle",
+      index:            int   = -1,
+      fade_in_duration: float = 0.0,
+    ) -> "Lineage":
+    """Create a lineage that starts inside a bundle."""
+    # Create the instance
+    instance = cls(diagram, color, start_x, 0, start_w)
+    # Register membership taking into accound fade-in duration
+    start_membership_x = start_x - fade_in_duration
+    in_bundle.add_member(
+      lineage          = instance,
+      start_x          = start_membership_x,
+      end_x            = diagram.view_width,
+      fade_in_duration = fade_in_duration,
+      index            = index,
+    )
+    # Set internal state so compile_segments knows it starts dependent
+    instance._initial_bundle = in_bundle
+    return instance
 
   def shift_to(self, from_x:float, to_x:float, to_y:float):
     """Shift lineage to new Y position over X range."""
@@ -46,7 +75,7 @@ class Lineage(ScalablePath):
     to_assembly.add_member(
       lineage          = self,
       start_x          = from_x,
-      end_x            = 99999, # Placeholder end
+      end_x            = self.diagram.view_width,
       fade_in_duration = to_x - from_x,
       index            = index,
     )
@@ -69,10 +98,15 @@ class Lineage(ScalablePath):
     self.membership_events.sort(key=lambda membership_event: membership_event.from_x)
     current_x = self.start_x
     current_y = self.start_y
-    # Assume the lineage starts independent.
-    # ToDo fix this, because later, lineages will be creatable inside bundles
-    is_dependent   = False
-    current_bundle = None
+
+    # Initialize state based on constructor
+    if self._initial_bundle:
+      is_dependent   = True
+      current_bundle = self._initial_bundle
+    else:
+      is_dependent   = False
+      current_bundle = None
+
     # Process time from start to end, handling events
     event_index = 0
     # We assume a max width for the diagram logic or infinite
