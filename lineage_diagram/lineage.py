@@ -38,7 +38,7 @@ class Lineage(ScalablePath):
     """Scale lineage to new W width over X range."""
     self.scale_events.append(ScaleEvent(from_x, to_x, to_w))
 
-  def join(self, from_x:float, to_x:float, to_assembly:"Bundle"):
+  def join(self, from_x:float, to_x:float, to_assembly:"Bundle", index:int=-1):
     """Join assembly over a transition X range."""
     self.membership_events.append(MembershipEvent(from_x, to_x, MembershipEventType.JOIN, assembly=to_assembly))
     # Inform the assembly of the new member.
@@ -47,7 +47,8 @@ class Lineage(ScalablePath):
       lineage          = self,
       start_x          = from_x,
       end_x            = 99999, # Placeholder end
-      fade_in_duration = to_x - from_x
+      fade_in_duration = to_x - from_x,
+      index            = index,
     )
 
   def leave(self, from_x:float, to_x:float, from_assembly:"Bundle", to_y:float):
@@ -64,23 +65,18 @@ class Lineage(ScalablePath):
   def compile_segments(self):
     """Converts events into geometry segments."""
     self.computed_segments = []
-
     # Sort events by time
     self.membership_events.sort(key=lambda membership_event: membership_event.from_x)
-
     current_x = self.start_x
     current_y = self.start_y
-
     # Assume the lineage starts independent.
     # ToDo fix this, because later, lineages will be creatable inside bundles
     is_dependent   = False
     current_bundle = None
-
     # Process time from start to end, handling events
     event_index = 0
     # We assume a max width for the diagram logic or infinite
     max_x = self.diagram.view_width
-
     while current_x < max_x:
       # Find next topology event
       next_event    = self.membership_events[event_index] if event_index < len(self.membership_events) else None

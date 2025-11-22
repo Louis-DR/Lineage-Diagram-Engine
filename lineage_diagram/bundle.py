@@ -46,16 +46,21 @@ class Bundle(ShiftablePath):
       lineage:          "Lineage",
       start_x:          float,
       end_x:            float,
-      fade_in_duration: float = 0.0
+      fade_in_duration: float = 0.0,
+      index:            int   = -1,
     ):
     """Add a member lineage to bundle."""
-    self.memberships.append(BundleMembership(
+    new_membership = BundleMembership(
       lineage           = lineage,
       start_x           = start_x,
       end_x             = end_x,
       fade_in_duration  = fade_in_duration,
       fade_out_duration = 0.0 # Will be set when/if the lineage leaves
-    ))
+    )
+    if index == -1:
+      self.memberships.append(new_membership)
+    else:
+      self.memberships.insert(index, new_membership)
 
   def shift_to(self, from_x:float, to_x:float, to_y:float):
     """Shift bundle to new Y position over X range."""
