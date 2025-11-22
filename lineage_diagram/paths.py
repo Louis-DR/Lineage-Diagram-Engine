@@ -33,11 +33,14 @@ class ScaleEvent:
   to_x:   float
   to_w:   float
 
-class ShiftablePath:
+class PathBase:
+  """Base class for paths with a defined lifecycle (start/end)."""
+  start_x: float
+  end_x:   Optional[float]
+
+class ShiftablePath(PathBase):
   """Path with Y position that can shift."""
-  start_x:      float
   start_y:      float
-  end_x:        float
   shift_events: list[ShiftEvent]
 
   def get_baseline_path(self) -> svg.Path:
@@ -66,18 +69,23 @@ class ShiftablePath:
       # Update the last point
       last_point = end_shift_point
     # Line to the end of the object
-    end_point = complex(self.end_x, last_point.imag)
+    # Use a large number if end_x is not defined (infinite existence)
+    effective_end_x = self.end_x if self.end_x is not None else 999999.0
+    end_point = complex(effective_end_x, last_point.imag)
     if end_point != last_point:
       baseline_path.append(svg.Line(last_point, end_point))
     return baseline_path
 
-class ScalablePath:
+class ScalablePath(PathBase):
   """Path with X width that can scale."""
   start_w:      float
   scale_events: list[ScaleEvent]
 
   def get_width_at(self, x: float) -> float:
     """Get the width of the object at X position."""
+    # If the object has ended, its width is 0
+    if self.end_x is not None and x > self.end_x:
+      return 0.0
     # Initial width of the object
     last_width = self.start_w
     # Sort events by time

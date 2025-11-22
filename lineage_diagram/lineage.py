@@ -31,6 +31,7 @@ class Lineage(ScalablePath):
     self.computed_segments = []
     # Internal state for compilation
     self._initial_bundle = None
+    self.end_x           = None
 
   @classmethod
   def create_in_bundle(
@@ -58,6 +59,74 @@ class Lineage(ScalablePath):
     # Set internal state so compile_segments knows it starts dependent
     instance._initial_bundle = in_bundle
     return instance
+
+  def get_width_at(self, x:float) -> float:
+    """Get the width of the lineage at X position."""
+    return super().get_width_at(x)
+
+  @classmethod
+  def create_from_merge(
+      cls,
+      diagram:      "Diagram",
+      color:        str,
+      merge_from_x: float,
+      start_x:      float,
+      start_y:      float,
+      start_w:      float,
+      parents:      list["Lineage"],
+    ) -> "Lineage":
+    """Create a lineage resulting from the merge of parents."""
+    child = cls(diagram, color, start_x, start_y, start_w)
+    # Sampling parent widths at the start of merge
+    parents_widths_at_from_x = [parent.get_width_at(merge_from_x) for parent in parents]
+    total_parents_width      = sum(parents_widths_at_from_x)
+    # Calculate proportional shares
+    if total_parents_width > 0:
+      proportions = [parent_width / total_parents_width for parent_width in parents_widths_at_from_x]
+    else:
+      proportions = [1.0 / len(parents) for _ in parents]
+    # Calculate widths of parents at merge point
+    proportional_widths = []
+    for width_at_from, proportion in zip(parents_widths_at_from_x, proportions):
+      proportional_share = start_w * proportion
+      # Clamp width logic:
+      # Lower bound: at least its own width or its share (prevent shrinking too much)
+      # Upper bound: at most the child width (prevent overflow)
+      lower_bound  = max(width_at_from, proportional_share)
+      target_width = min(lower_bound, start_w)
+      proportional_widths.append(target_width)
+    # Place the parents vertically at the merge point
+    proportional_shares = [start_w * proportion for proportion in proportions]
+    current_slot_y      = start_y - start_w / 2
+    parent_centers      = []
+    for share in proportional_shares:
+      center = current_slot_y + share / 2
+      parent_centers.append(center)
+      current_slot_y += share
+    # Child edge bounds
+    child_upper_edge = start_y + start_w / 2
+    child_lower_edge = start_y - start_w / 2
+    # Iterate over parents and their attributes at merge point
+    for parent, parent_target_w, parent_center in zip(parents, proportional_widths, parent_centers):
+      # Calculate edges based on target width
+      parent_upper_edge = parent_center + parent_target_w / 2
+      parent_lower_edge = parent_center - parent_target_w / 2
+      # Clamp to container
+      if parent_upper_edge > child_upper_edge:
+        correction = parent_upper_edge - child_upper_edge
+        parent_center -= correction
+      elif parent_lower_edge < child_lower_edge:
+        correction = child_lower_edge - parent_lower_edge
+        parent_center += correction
+      # Apply transformations
+      parent.shift_to(merge_from_x, start_x, parent_center)
+      parent.scale_to(merge_from_x, start_x, parent_target_w)
+      parent.terminate_at(start_x)
+    return child
+
+  def terminate_at(self, x:float):
+    """Stop the lineage at X position."""
+    self.end_x = x
 
   def shift_to(self, from_x:float, to_x:float, to_y:float):
     """Shift lineage to new Y position over X range."""
@@ -110,7 +179,7 @@ class Lineage(ScalablePath):
     # Process time from start to end, handling events
     event_index = 0
     # We assume a max width for the diagram logic or infinite
-    max_x = self.diagram.view_width
+    max_x = self.end_x if self.end_x is not None else self.diagram.view_width
     while current_x < max_x:
       # Find next topology event
       next_event    = self.membership_events[event_index] if event_index < len(self.membership_events) else None
