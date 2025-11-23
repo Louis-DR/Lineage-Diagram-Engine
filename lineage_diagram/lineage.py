@@ -171,20 +171,47 @@ class Lineage(ScalablePath):
     else:
       proportions = [1.0 / len(children_target_widths) for _ in children_target_widths]
 
-    # Calculate start widths of children at split point (proportional to parent width)
-    children_start_widths = [parent_w * proportion for proportion in proportions]
+    # Calculate start widths of children at split point
+    children_start_widths = []
+    for target_width, proportion in zip(children_target_widths, proportions):
+      proportional_share = parent_w * proportion
+      # Clamp width logic:
+      # Lower bound: at least its own target width or its share (prevent shrinking too much)
+      # Upper bound: at most the parent width (prevent overflow)
+      lower_bound  = max(target_width, proportional_share)
+      start_width  = min(lower_bound, parent_w)
+      children_start_widths.append(start_width)
 
     # Place the children vertically at the split point
-    # They should fill the parent's width
+    proportional_shares    = [parent_w * proportion for proportion in proportions]
     current_slot_y         = parent_center_y - parent_w / 2
     children_start_centers = []
 
-    for start_w in children_start_widths:
-      center = current_slot_y + start_w / 2
+    for share in proportional_shares:
+      center = current_slot_y + share / 2
       children_start_centers.append(center)
-      current_slot_y += start_w
+      current_slot_y += share
 
-    return children_start_widths, children_start_centers
+    # Parent edge bounds
+    parent_upper_edge = parent_center_y + parent_w / 2
+    parent_lower_edge = parent_center_y - parent_w / 2
+
+    # Iterate over children to adjust their centers
+    adjusted_centers = []
+    for child_start_w, child_center in zip(children_start_widths, children_start_centers):
+      child_upper_edge = child_center + child_start_w / 2
+      child_lower_edge = child_center - child_start_w / 2
+
+      # Clamp to container
+      if child_upper_edge > parent_upper_edge:
+        correction    = child_upper_edge - parent_upper_edge
+        child_center -= correction
+      elif child_lower_edge < parent_lower_edge:
+        correction    = parent_lower_edge - child_lower_edge
+        child_center += correction
+      adjusted_centers.append(child_center)
+
+    return children_start_widths, adjusted_centers
 
   @classmethod
   def create_from_merge(
