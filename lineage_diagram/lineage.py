@@ -446,18 +446,18 @@ class Lineage(ScalablePath):
   @classmethod
   def create_split_from(
       cls,
-      parent:                 "Lineage",
-      start_x:                float,
-      split_to_x:             float,
-      new_color:              str,
-      new_target_w:           float,
-      new_target_y:           float = 0.0,
-      continuing_target_w:    float = 0.0,
-      continuing_target_y:    float = 0.0,
-      new_in_bundle:          "Bundle" = None,
-      continuing_in_bundle:   "Bundle" = None,
-      new_index:              int = -1,
-      continuing_index:       int = -1,
+      parent:           "Lineage",
+      start_x:          float,
+      split_to_x:       float,
+      new_color:        str,
+      new_target_w:     float,
+      new_target_y:     float = 0.0,
+      new_in_bundle:    "Bundle" = None,
+      new_index:        int = -1,
+      parent_target_w:  float = 0.0,
+      parent_target_y:  float = 0.0,
+      parent_in_bundle: "Bundle" = None,
+      parent_index:     int = -1,
     ) -> "Lineage":
     """
     Split a new lineage from parent, while parent continues.
@@ -466,23 +466,23 @@ class Lineage(ScalablePath):
     parent_w = parent.get_width_at(start_x)
 
     # 2. Prepare specs for sorting
-    continuing_spec = {
-        'type': 'continuing',
-        'target_w': continuing_target_w,
-        'target_y': continuing_target_y,
-        'in_bundle': continuing_in_bundle,
-        'index': continuing_index
+    parent_spec = {
+        'type':      'parent',
+        'target_w':  parent_target_w,
+        'target_y':  parent_target_y,
+        'in_bundle': parent_in_bundle,
+        'index':     parent_index
     }
     new_spec = {
-        'type': 'new',
-        'target_w': new_target_w,
-        'target_y': new_target_y,
+        'type':      'new',
+        'target_w':  new_target_w,
+        'target_y':  new_target_y,
         'in_bundle': new_in_bundle,
-        'index': new_index,
-        'color': new_color
+        'index':     new_index,
+        'color':     new_color
     }
 
-    children_specs = [continuing_spec, new_spec]
+    children_specs = [parent_spec, new_spec]
 
     # Sort based on target Y
     def get_spec_y(spec):
@@ -526,8 +526,8 @@ class Lineage(ScalablePath):
     new_lineage = None
 
     for spec, start_w, start_center_rel in zip(children_specs, children_start_widths, children_start_centers_relative):
-        if spec['type'] == 'continuing':
-            # Update PARENT (Continuing)
+        if spec['type'] == 'parent':
+            # Update PARENT (Parent)
             # We transition directly from current state at start_x to target state at split_to_x.
             # This avoids vertical line artifacts caused by instant shifts/scales.
 
@@ -561,7 +561,7 @@ class Lineage(ScalablePath):
       merge_from_x:   float,
       end_x:          float,
       target_w:       float,
-      target_y:       float = 0.0,
+      target_y:       Optional[float] = None,
       in_bundle:      "Bundle" = None, # Not used logic-wise for target? Or maybe?
     ):
     """
@@ -602,9 +602,13 @@ class Lineage(ScalablePath):
 
     parents.sort(key=get_parent_y)
 
+    # Resolve target_y if not provided
+    child_target_y = target_y
+    if child_target_y is None:
+        child_target_y = target_lineage._get_y_at(end_x)
+
     # Target spec defines the "child" (result) properties
     child_start_w = target_w
-    child_target_y = target_y
 
     # We need to calculate where they should be at `end_x` (the merge point).
     parent_target_widths, parent_centers = self._calculate_merge_layout(
@@ -619,7 +623,7 @@ class Lineage(ScalablePath):
             parent.shift_to(merge_from_x, end_x, center_at_merge)
             parent.terminate_at(end_x)
         else:
-            # Continuing Lineage (Target)
+            # Parent Lineage (Target)
             # We transition from current state at merge_from_x to FINAL state at end_x.
             # We skip the intermediate "packed" state to avoid vertical artifacts.
             parent.scale_to(merge_from_x, end_x, child_start_w)
