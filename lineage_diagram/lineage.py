@@ -139,6 +139,34 @@ class Lineage(ScalablePath):
 
     return proportional_widths, adjusted_centers
 
+  @staticmethod
+  def _calculate_split_layout(
+      parent_w:               float,
+      parent_center_y:        float,
+      children_target_widths: list[float],
+    ) -> tuple[list[float], list[float]]:
+    """Calculate the start width and center Y for each child at the split point."""
+    total_children_target_width = sum(children_target_widths)
+    # Calculate proportional shares based on target widths
+    if total_children_target_width > 0:
+      proportions = [w / total_children_target_width for w in children_target_widths]
+    else:
+      proportions = [1.0 / len(children_target_widths) for _ in children_target_widths]
+
+    # Calculate start widths of children at split point (proportional to parent width)
+    children_start_widths = [parent_w * p for p in proportions]
+
+    # Place the children vertically at the split point
+    # They should fill the parent's width
+    current_slot_y = parent_center_y - parent_w / 2
+    children_start_centers = []
+    for start_w in children_start_widths:
+      center = current_slot_y + start_w / 2
+      children_start_centers.append(center)
+      current_slot_y += start_w
+
+    return children_start_widths, children_start_centers
+
   @classmethod
   def create_from_merge(
       cls,
@@ -225,6 +253,159 @@ class Lineage(ScalablePath):
       parent.scale_to(merge_from_x, start_x, parent_target_w)
       parent.terminate_at(start_x)
     return child
+
+  def split(
+      self,
+      start_x:        float,
+      split_to_x:     float,
+      children_specs: list[dict],
+    ) -> list["Lineage"]:
+    """
+    Split this lineage into multiple children.
+    children_specs is a list of dicts with keys:
+      - color: str
+      - target_w: float
+      - target_y: float (optional, for independent)
+      - in_bundle: Bundle (optional)
+      - index: int (optional, for bundle)
+    """
+    # 1. Get parent state at start_x
+    parent_w = self.get_width_at(start_x)
+    # For Y, if we are in a bundle, we might need the resolved Y.
+    # But for calculation relative to parent, we can assume parent is at 0 if we use relative offsets,
+    # or we try to resolve absolute Y.
+    # Let's try to resolve absolute Y if possible, or use 0 if we are going to be relative to parent?
+    # Actually, the children will start at the parent's position.
+    # If the parent is in a bundle, the children start in that bundle (conceptually) or
+    # they start at the resolved position of the parent.
+    # Simpler approach: Calculate children start Ys relative to parent center.
+    # Then if parent is in bundle, children start "leaving" that bundle or just start at that absolute Y?
+    # Wait, if parent is in bundle, it disappears. Children appear.
+    # If children are to be independent, they start at parent's absolute Y.
+    # If children are to be in the SAME bundle, they just start there.
+    # If children are to be in a DIFFERENT bundle, they join it.
+
+    # Let's resolve parent absolute Y at start_x
+    # This is tricky without full compilation.
+    # However, we can use the same logic as `_resolve_target_y` but for self.
+    # Or we can assume the user knows what they are doing.
+    # Let's look at `merge`: parents shift to `target_y`.
+    # Here children shift FROM `start_y`.
+    # We need `start_y` for each child.
+
+    # Let's assume for now we can get a "base" Y for the parent.
+    # If the parent is independent, we can estimate its Y (start_y + shifts).
+    # If the parent is in a bundle, we can get its position in the bundle.
+
+    # Actually, let's look at how `merge` works:
+    # Parents `shift_to` the merge point.
+    # Here, children `shift_to` their target point FROM the split point.
+    # So we need to set the initial state of the children.
+
+    # Let's calculate the layout relative to the parent's center.
+    children_target_widths = [spec['target_w'] for spec in children_specs]
+    children_start_widths, children_start_centers_relative = self._calculate_split_layout(
+      parent_w, 0, children_target_widths
+    )
+
+    # We need to know if the parent is in a bundle at start_x
+    parent_bundle = None
+    if self._initial_bundle:
+       parent_bundle = self._initial_bundle
+    # Check events
+    for membership_event in sorted(self.membership_events, key=lambda e: e.from_x):
+      if membership_event.from_x <= start_x:
+        if membership_event.type == MembershipEventType.JOIN:
+          parent_bundle = membership_event.assembly
+        elif membership_event.type == MembershipEventType.LEAVE:
+          parent_bundle = None
+
+    children = []
+    for spec, start_w, start_center_rel in zip(children_specs, children_start_widths, children_start_centers_relative):
+      color     = spec['color']
+      target_w  = spec['target_w']
+      in_bundle = spec.get('in_bundle')
+      index     = spec.get('index', -1)
+      target_y  = spec.get('target_y', 0)
+
+      # Create child
+      # The child starts at start_x.
+      # Its Y position at start_x depends on the parent.
+      # If parent is in bundle, child starts "in bundle" context effectively?
+      # Or we can say child starts at absolute Y calculated from parent.
+
+      # If parent is in bundle, we can't easily get absolute Y without bundle logic.
+      # BUT, we can use the `create_from_merge` logic in reverse?
+      # In `merge`, parents leave bundle to go to child.
+      # Here, child starts at parent (which might be in bundle) and goes to target.
+
+      # Case 1: Parent is in bundle.
+      # We can't easily initialize a child "at a specific offset in a bundle" without it being a member.
+      # But the parent is disappearing.
+      # Maybe we can say the child starts as a member of the parent's bundle?
+      # But it immediately leaves/shifts?
+      # Or we create the child as independent, but with start_y = parent_resolved_y + offset.
+
+      # Let's try to resolve parent Y.
+      parent_y_at_start = self.start_y # Default
+      # If independent, apply shifts
+      if not parent_bundle:
+        # This is a simplification, ideally we'd replay shifts.
+        # But `Lineage` doesn't expose `get_y_at(x)`.
+        # Let's assume for now simple shifts or static.
+        # If we want to be robust, we might need `get_y_at`.
+        # Let's look at `_resolve_target_y`. It resolves for a target lineage.
+        # We can use that if we treat `self` as target?
+        # `_resolve_target_y` handles bundle lookup.
+        # For independent, it returns None.
+        pass
+
+      # If parent is in bundle, we can get its center.
+      if parent_bundle:
+        # We need to access bundle geometry.
+        # `get_center_point_of_member_at` works if member is in bundle.
+        # Parent is in bundle at start_x.
+        center_c = parent_bundle.get_center_point_of_member_at(start_x, self)
+        parent_y_at_start = center_c.imag
+      else:
+        # Best effort for independent parent
+        # We scan shifts
+        current_y = self.start_y
+        for shift in self.shift_events:
+          if shift.to_x <= start_x:
+            current_y = shift.to_y
+        parent_y_at_start = current_y
+
+      child_start_y = parent_y_at_start + start_center_rel
+
+      # Create the child instance
+      # If the child target is in a bundle, we might want to create it "in bundle" but with a fade in?
+      # `create_in_bundle` assumes starting width.
+      # Here we have a transition of width too.
+
+      # Let's create it as independent first, then join/shift.
+      child = Lineage(self.diagram, color, start_x, child_start_y, start_w)
+
+      # Transition width
+      child.scale_to(start_x, split_to_x, target_w)
+
+      # Transition position
+      if in_bundle:
+        # Join bundle
+        # We want to join such that at split_to_x we are in the bundle.
+        # `join` takes (from_x, to_x).
+        child.join(start_x, split_to_x, in_bundle, index)
+      else:
+        # Shift to target Y
+        child.shift_to(start_x, split_to_x, target_y)
+
+      children.append(child)
+
+    # Terminate parent
+    self.terminate_at(start_x)
+
+    return children
+
 
   def terminate_at(self, x:float):
     """Stop the lineage at X position."""
