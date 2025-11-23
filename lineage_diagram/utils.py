@@ -1,38 +1,37 @@
 import svgpathtools as svg
-import numpy        as np
 
-def smootherstep(linear: float) -> float:
-  """Smooth step function implementing quintic smoothing."""
-  if linear <= 0: return 0
-  if linear >= 1: return 1
-  squared = linear * linear
-  cubed   = linear * squared
-  return cubed * (6.0 * squared - 15.0 * linear + 10.0)
+def smootherstep(x: float) -> float:
+  """
+  Compute the smootherstep function for a value between 0 and 1.
+  This function provides a smooth transition with zero 1st and 2nd derivatives at endpoints.
+  Equation: 6x^5 - 15x^4 + 10x^3
+  """
+  return 6 * x**5 - 15 * x**4 + 10 * x**3
 
-def find_t_at_x(
-    path:       svg.Path,
-    target_x:   float,
-    resolution: int = 100
-  ) -> float:
-  """Get the T position along the path corresponding to the X position."""
-  # ToDo replace with binary search + align to expected resolution for perfect match
-  # Quick coarse search
-  best_t   = 0.0
-  min_dist = float('inf')
-  for t in np.linspace(0, 1, resolution):
-    point = path.point(t)
-    dist = abs(point.real - target_x)
-    if dist < min_dist:
-      min_dist = dist
-      best_t = t
-  # Refine with binary search around the best coarse t
-  low  = max(0, best_t - 0.01)
-  high = min(1, best_t + 0.01)
-  for _ in range(20):
-    mid   = (low + high) / 2
-    point = path.point(mid)
-    if point.real < target_x:
-      low = mid
+def find_t_at_x(path: svg.Path, x: float, tolerance: float = 1e-6) -> float:
+  """
+  Find the parameter t (0 to 1) on the path such that path.point(t).real is close to x.
+  Assumes the path is monotonic in X.
+  Uses binary search.
+  """
+  t_min = 0.0
+  t_max = 1.0
+
+  # Check boundaries
+  if x <= path.point(t_min).real: return t_min
+  if x >= path.point(t_max).real: return t_max
+
+  # Binary search
+  for _ in range(100):
+    t_mid = (t_min + t_max) / 2
+    p_mid = path.point(t_mid)
+
+    if abs(p_mid.real - x) < tolerance:
+      return t_mid
+
+    if p_mid.real < x:
+      t_min = t_mid
     else:
-      high = mid
-  return (low + high) / 2
+      t_max = t_mid
+
+  return (t_min + t_max) / 2

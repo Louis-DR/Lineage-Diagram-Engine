@@ -1,7 +1,7 @@
 import numpy        as np
 
 from dataclasses import dataclass
-from typing      import TYPE_CHECKING, Any
+from typing      import TYPE_CHECKING
 
 from .paths      import ShiftablePath, ShiftEvent
 from .utils      import find_t_at_x, smootherstep
@@ -12,6 +12,9 @@ if TYPE_CHECKING:
 
 @dataclass
 class BundleMembership:
+  """
+  Represents the membership of a lineage in a bundle.
+  """
   lineage:           "Lineage"
   start_x:           float
   end_x:             float
@@ -19,6 +22,12 @@ class BundleMembership:
   fade_out_duration: float = 0.0
 
 class Bundle(ShiftablePath):
+  """
+  Represents a bundle of lineages.
+  A bundle manages the layout of its members, ensuring they move together
+  with a fixed margin between them.
+  """
+
   def __init__(
       self,
       diagram: "Diagram",
@@ -31,15 +40,22 @@ class Bundle(ShiftablePath):
     self.start_x = start_x
     self.start_y = start_y
     self.margin  = margin
+
     # Events lists
-    self.shift_events: list[ShiftEvent]       = []
-    self.memberships:  list[BundleMembership] = []
+    self._shift_events: list[ShiftEvent]       = []
+    self._memberships:  list[BundleMembership] = []
+
     # Computed points for members
-    self.compiled_member_points: dict["Lineage",tuple[list[complex],list[complex]]] = {}
+    self._compiled_member_points: dict["Lineage", tuple[list[complex], list[complex]]] = {}
 
   @property
   def end_x(self) -> float:
     return self.diagram.view_width
+
+  @property
+  def memberships(self) -> list[BundleMembership]:
+    """Public accessor for memberships."""
+    return self._memberships
 
   def add_member(
       self,
@@ -58,13 +74,13 @@ class Bundle(ShiftablePath):
       fade_out_duration = 0.0 # Will be set when/if the lineage leaves
     )
     if index == -1:
-      self.memberships.append(new_membership)
+      self._memberships.append(new_membership)
     else:
-      self.memberships.insert(index, new_membership)
+      self._memberships.insert(index, new_membership)
 
   def shift_to(self, from_x:float, to_x:float, to_y:float):
     """Shift bundle to new Y position over X range."""
-    self.shift_events.append(ShiftEvent(
+    self._shift_events.append(ShiftEvent(
       from_x = from_x,
       to_x   = to_x,
       to_y   = to_y,
@@ -72,7 +88,7 @@ class Bundle(ShiftablePath):
 
   def get_memberships_at(self, x:float) -> list[BundleMembership]:
     """Return memberships active at X, sorted by insertion order."""
-    return [membership for membership in self.memberships if membership.start_x <= x <= membership.end_x]
+    return [membership for membership in self._memberships if membership.start_x <= x <= membership.end_x]
 
   def _get_factor(self, membership:BundleMembership, x:float) -> float:
     """Calculate the presence factor (0 to 1) of a member at position X."""
@@ -93,67 +109,85 @@ class Bundle(ShiftablePath):
   def _calculate_layout(self, memberships:list[BundleMembership], x:float) -> tuple[list[float],list]:
     """Calculate widths and margins for all members at X to ensure smooth transitions."""
     factors = [self._get_factor(membership, x) for membership in memberships]
+
     # Calculate effective widths (lineage width scaled by factor)
     effective_widths = [membership.lineage.get_width_at(x) * factor for membership, factor in zip(memberships, factors)]
+
     # Create the array of gaps
     count = len(memberships)
     gaps  = []
+
     if count > 1:
       # Initial gaps: each member contributes half a margin multiplied by their presense factors
       for index in range(count - 1):
         gaps.append(0.5 * self.margin * (factors[index] + factors[index+1]))
+
       # Edge correction: The "average" formula assumes neighbors exist on both sides
       # and are fully present (factor 1.0). We must remove the margin allocated to
       # the empty space at the start and end.
       start_excess = 0.5 * self.margin * (1.0 - factors[0])
       end_excess   = 0.5 * self.margin * (1.0 - factors[-1])
+
       # Apply start correction (bottom to top)
       for index in range(len(gaps)):
         if start_excess <= 1e-5: break
         correction    = min(gaps[index], start_excess)
         gaps[index]  -= correction
         start_excess -= correction
+
       # Apply end correction (top to bottom)
       for index in range(len(gaps)-1, -1, -1):
         if end_excess <= 1e-5: break
         correction  = min(gaps[index], end_excess)
         gaps[index] -= correction
         end_excess  -= correction
+
     # Add a zero to make the list lengths match
     if count > 0:
       gaps.append(0)
+
     return effective_widths, gaps
 
   def solve_geometry(self):
     """Pre-calculate baseline and stacking for the whole duration."""
     baseline_path = self.get_baseline_path()
+
     # Initialize empty point lists for all members
-    self.compiled_member_points = {membership.lineage: ([], []) for membership in self.memberships}
+    self._compiled_member_points = {membership.lineage: ([], []) for membership in self._memberships}
+
     # Work step by step at the configured resolution
     for t in np.linspace(0, 1, self.diagram.resolution):
       # Get parameters at this position alongside the path
       point  = baseline_path.point(t)
       normal = baseline_path.normal(t)
       x      = point.real
+
       memberships = self.get_memberships_at(x)
       if not memberships: continue
+
       # Get the widths and gaps
       widths, gaps = self._calculate_layout(memberships, x)
+
       # Total bundle width
       bundle_width = sum(widths) + sum(gaps)
+
       # Initial offset, start at the top
       current_offset = -bundle_width / 2
+
       # Iterate over members in order
       for membership, member_width, member_gap in zip(memberships, widths, gaps):
         # Offset lines of this member
         upper_offset = current_offset + member_width
         lower_offset = current_offset
+
         # Compute the points of the upper and lower edges of the path
         upper_point = point + normal * upper_offset
         lower_point = point + normal * lower_offset
+
         # ToDo reimplement back-filtering here
-        self.compiled_member_points[membership.lineage][0].append(upper_point)
-        self.compiled_member_points[membership.lineage][1].append(lower_point)
+        self._compiled_member_points[membership.lineage][0].append(upper_point)
+        self._compiled_member_points[membership.lineage][1].append(lower_point)
+
         # Update bundle offset
         current_offset += member_width + member_gap
 
@@ -161,17 +195,23 @@ class Bundle(ShiftablePath):
     """Calculate the upper and lower points of a member at a specific X."""
     baseline_path  = self.get_baseline_path()
     t              = find_t_at_x(baseline_path, x)
+
     # Get parameters at this position alongside the path
     point          = baseline_path.point(t)
     normal         = baseline_path.normal(t)
     x_on_path      = point.real
+
     memberships    = self.get_memberships_at(x_on_path)
+
     # Get the widths and gaps
     widths, gaps   = self._calculate_layout(memberships, x_on_path)
+
     # Total bundle width
     bundle_width   = sum(widths) + sum(gaps)
+
     # Initial offset, start at the top
     current_offset = -bundle_width / 2
+
     # Iterate over members in order
     for membership, member_width, member_gap in zip(memberships, widths, gaps):
       # If found the requested lineage
@@ -180,8 +220,10 @@ class Bundle(ShiftablePath):
         upper_point = point + normal * (current_offset + member_width)
         lower_point = point + normal * current_offset
         return upper_point, lower_point
+
       # Else update the bundle offset
       current_offset += member_width + member_gap
+
     # Lineage not found, fallback to bundle center
     print(f"ERROR: Lineage not found in bundle at {x=}.")
     return point, point
@@ -200,10 +242,10 @@ class Bundle(ShiftablePath):
     """Retrieve the pre-calculated points, filtered by X range."""
     # ToDo investigate better system, perhaps storing points in membership structure
     # Retrieve points for this lineage
-    if lineage not in self.compiled_member_points:
+    if lineage not in self._compiled_member_points:
       print("ERROR: No precompiled points this lineage in the bundle.")
       return ([], [])
-    all_upper_points, all_lower_points = self.compiled_member_points[lineage]
+    all_upper_points, all_lower_points = self._compiled_member_points[lineage]
 
     # Filter points within x range
     # ToDo replace with bisect or numpy masking for performance

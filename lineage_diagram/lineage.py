@@ -1,14 +1,19 @@
 from typing import TYPE_CHECKING, Optional
 
 from .paths    import ScalablePath, ShiftEvent, ScaleEvent, MembershipEvent, MembershipEventType
-from .segments import IndependantSegment, DependantSegment
+from .segments import IndependentSegment, DependentSegment
 
 if TYPE_CHECKING:
   from .diagram import Diagram
   from .bundle  import Bundle
 
 class Lineage(ScalablePath):
-  """Lineage."""
+  """
+  Represents a single lineage in the diagram.
+  A lineage is a path that can change width and position over time.
+  It can be independent or part of a bundle.
+  """
+
   def __init__(
       self,
       diagram: "Diagram",
@@ -23,15 +28,18 @@ class Lineage(ScalablePath):
     self.start_x = start_x
     self.start_y = start_y
     self.start_w = start_w
+
     # Events lists
     self.membership_events: list[MembershipEvent] = []
-    self.shift_events:      list[ShiftEvent]      = []
-    self.scale_events:      list[ScaleEvent]      = []
+    self._shift_events:      list[ShiftEvent]      = []
+    self._scale_events:      list[ScaleEvent]      = []
+
     # Computed segments
-    self.computed_segments = []
+    self._computed_segments = []
+
     # Internal state for compilation
     self._initial_bundle = None
-    self.end_x           = None
+    self.end_x          = None
 
   @classmethod
   def create_in_bundle(
@@ -47,6 +55,7 @@ class Lineage(ScalablePath):
     """Create a lineage that starts inside a bundle."""
     # Create the instance
     instance = cls(diagram, color, start_x, 0, start_w)
+
     # Register membership taking into accound fade-in duration
     start_membership_x = start_x - fade_in_duration
     in_bundle.add_member(
@@ -56,6 +65,7 @@ class Lineage(ScalablePath):
       fade_in_duration = fade_in_duration,
       index            = index,
     )
+
     # Set internal state so compile_segments knows it starts dependent
     instance._initial_bundle = in_bundle
     return instance
@@ -97,11 +107,13 @@ class Lineage(ScalablePath):
     # Sampling parent widths at the start of merge
     parents_widths_at_from_x = [parent.get_width_at(merge_from_x) for parent in parents]
     total_parents_width      = sum(parents_widths_at_from_x)
+
     # Calculate proportional shares
     if total_parents_width > 0:
       proportions = [parent_width / total_parents_width for parent_width in parents_widths_at_from_x]
     else:
       proportions = [1.0 / len(parents) for _ in parents]
+
     # Calculate widths of parents at merge point
     proportional_widths = []
     for width_at_from, proportion in zip(parents_widths_at_from_x, proportions):
@@ -112,22 +124,27 @@ class Lineage(ScalablePath):
       lower_bound  = max(width_at_from, proportional_share)
       target_width = min(lower_bound, start_w)
       proportional_widths.append(target_width)
+
     # Place the parents vertically at the merge point
     proportional_shares = [start_w * proportion for proportion in proportions]
     current_slot_y      = start_y - start_w / 2
     parent_centers      = []
+
     for share in proportional_shares:
       center = current_slot_y + share / 2
       parent_centers.append(center)
       current_slot_y += share
+
     # Child edge bounds
     child_upper_edge = start_y + start_w / 2
     child_lower_edge = start_y - start_w / 2
+
     # Iterate over parents to adjust their centers
     adjusted_centers = []
     for parent_target_w, parent_center in zip(proportional_widths, parent_centers):
       parent_upper_edge = parent_center + parent_target_w / 2
       parent_lower_edge = parent_center - parent_target_w / 2
+
       # Clamp to container
       if parent_upper_edge > child_upper_edge:
         correction     = parent_upper_edge - child_upper_edge
@@ -147,19 +164,21 @@ class Lineage(ScalablePath):
     ) -> tuple[list[float], list[float]]:
     """Calculate the start width and center Y for each child at the split point."""
     total_children_target_width = sum(children_target_widths)
+
     # Calculate proportional shares based on target widths
     if total_children_target_width > 0:
-      proportions = [w / total_children_target_width for w in children_target_widths]
+      proportions = [width / total_children_target_width for width in children_target_widths]
     else:
       proportions = [1.0 / len(children_target_widths) for _ in children_target_widths]
 
     # Calculate start widths of children at split point (proportional to parent width)
-    children_start_widths = [parent_w * p for p in proportions]
+    children_start_widths = [parent_w * proportion for proportion in proportions]
 
     # Place the children vertically at the split point
     # They should fill the parent's width
-    current_slot_y = parent_center_y - parent_w / 2
+    current_slot_y         = parent_center_y - parent_w / 2
     children_start_centers = []
+
     for start_w in children_start_widths:
       center = current_slot_y + start_w / 2
       children_start_centers.append(center)
@@ -183,13 +202,13 @@ class Lineage(ScalablePath):
     """Create a lineage resulting from the merge of parents."""
     if in_bundle:
       fade_in_duration = start_x - merge_from_x
-      child = cls.create_in_bundle(diagram, color, start_x, start_w, in_bundle, index, fade_in_duration)
+      child            = cls.create_in_bundle(diagram, color, start_x, start_w, in_bundle, index, fade_in_duration)
       # If in bundle, start_y is ignored/dynamic. We use 0 as base for relative calculations if needed,
       # but really we should rely on the child's dynamic position.
       # For the layout calculation below, we assume centered around 0 (relative) and will use target_lineage offset.
       layout_base_y = 0
     else:
-      child = cls(diagram, color, start_x, start_y, start_w)
+      child         = cls(diagram, color, start_x, start_y, start_w)
       layout_base_y = start_y
 
     # Calculate layout
@@ -271,36 +290,6 @@ class Lineage(ScalablePath):
     """
     # 1. Get parent state at start_x
     parent_w = self.get_width_at(start_x)
-    # For Y, if we are in a bundle, we might need the resolved Y.
-    # But for calculation relative to parent, we can assume parent is at 0 if we use relative offsets,
-    # or we try to resolve absolute Y.
-    # Let's try to resolve absolute Y if possible, or use 0 if we are going to be relative to parent?
-    # Actually, the children will start at the parent's position.
-    # If the parent is in a bundle, the children start in that bundle (conceptually) or
-    # they start at the resolved position of the parent.
-    # Simpler approach: Calculate children start Ys relative to parent center.
-    # Then if parent is in bundle, children start "leaving" that bundle or just start at that absolute Y?
-    # Wait, if parent is in bundle, it disappears. Children appear.
-    # If children are to be independent, they start at parent's absolute Y.
-    # If children are to be in the SAME bundle, they just start there.
-    # If children are to be in a DIFFERENT bundle, they join it.
-
-    # Let's resolve parent absolute Y at start_x
-    # This is tricky without full compilation.
-    # However, we can use the same logic as `_resolve_target_y` but for self.
-    # Or we can assume the user knows what they are doing.
-    # Let's look at `merge`: parents shift to `target_y`.
-    # Here children shift FROM `start_y`.
-    # We need `start_y` for each child.
-
-    # Let's assume for now we can get a "base" Y for the parent.
-    # If the parent is independent, we can estimate its Y (start_y + shifts).
-    # If the parent is in a bundle, we can get its position in the bundle.
-
-    # Actually, let's look at how `merge` works:
-    # Parents `shift_to` the merge point.
-    # Here, children `shift_to` their target point FROM the split point.
-    # So we need to set the initial state of the children.
 
     # Let's calculate the layout relative to the parent's center.
     children_target_widths = [spec['target_w'] for spec in children_specs]
@@ -312,8 +301,9 @@ class Lineage(ScalablePath):
     parent_bundle = None
     if self._initial_bundle:
        parent_bundle = self._initial_bundle
+
     # Check events
-    for membership_event in sorted(self.membership_events, key=lambda e: e.from_x):
+    for membership_event in sorted(self.membership_events, key=lambda event: event.from_x):
       if membership_event.from_x <= start_x:
         if membership_event.type == MembershipEventType.JOIN:
           parent_bundle = membership_event.assembly
@@ -331,47 +321,22 @@ class Lineage(ScalablePath):
       # Create child
       # The child starts at start_x.
       # Its Y position at start_x depends on the parent.
-      # If parent is in bundle, child starts "in bundle" context effectively?
-      # Or we can say child starts at absolute Y calculated from parent.
-
-      # If parent is in bundle, we can't easily get absolute Y without bundle logic.
-      # BUT, we can use the `create_from_merge` logic in reverse?
-      # In `merge`, parents leave bundle to go to child.
-      # Here, child starts at parent (which might be in bundle) and goes to target.
-
-      # Case 1: Parent is in bundle.
-      # We can't easily initialize a child "at a specific offset in a bundle" without it being a member.
-      # But the parent is disappearing.
-      # Maybe we can say the child starts as a member of the parent's bundle?
-      # But it immediately leaves/shifts?
-      # Or we create the child as independent, but with start_y = parent_resolved_y + offset.
 
       # Let's try to resolve parent Y.
       parent_y_at_start = self.start_y # Default
-      # If independent, apply shifts
-      if not parent_bundle:
-        # This is a simplification, ideally we'd replay shifts.
-        # But `Lineage` doesn't expose `get_y_at(x)`.
-        # Let's assume for now simple shifts or static.
-        # If we want to be robust, we might need `get_y_at`.
-        # Let's look at `_resolve_target_y`. It resolves for a target lineage.
-        # We can use that if we treat `self` as target?
-        # `_resolve_target_y` handles bundle lookup.
-        # For independent, it returns None.
-        pass
 
       # If parent is in bundle, we can get its center.
       if parent_bundle:
         # We need to access bundle geometry.
         # `get_center_point_of_member_at` works if member is in bundle.
         # Parent is in bundle at start_x.
-        center_c = parent_bundle.get_center_point_of_member_at(start_x, self)
-        parent_y_at_start = center_c.imag
+        center_in_bundle  = parent_bundle.get_center_point_of_member_at(start_x, self)
+        parent_y_at_start = center_in_bundle.imag
       else:
         # Best effort for independent parent
         # We scan shifts
         current_y = self.start_y
-        for shift in self.shift_events:
+        for shift in self._shift_events:
           if shift.to_x <= start_x:
             current_y = shift.to_y
         parent_y_at_start = current_y
@@ -379,10 +344,6 @@ class Lineage(ScalablePath):
       child_start_y = parent_y_at_start + start_center_rel
 
       # Create the child instance
-      # If the child target is in a bundle, we might want to create it "in bundle" but with a fade in?
-      # `create_in_bundle` assumes starting width.
-      # Here we have a transition of width too.
-
       # Let's create it as independent first, then join/shift.
       child = Lineage(self.diagram, color, start_x, child_start_y, start_w)
 
@@ -406,7 +367,6 @@ class Lineage(ScalablePath):
 
     return children
 
-
   def terminate_at(self, x:float):
     """Stop the lineage at X position."""
     self.end_x = x
@@ -420,11 +380,11 @@ class Lineage(ScalablePath):
       offset_y:       float     = 0.0
     ):
     """Shift lineage to new Y position over X range."""
-    self.shift_events.append(ShiftEvent(from_x, to_x, to_y, target_lineage, offset_y))
+    self._shift_events.append(ShiftEvent(from_x, to_x, to_y, target_lineage, offset_y))
 
   def scale_to(self, from_x:float, to_x:float, to_w:float):
     """Scale lineage to new W width over X range."""
-    self.scale_events.append(ScaleEvent(from_x, to_x, to_w))
+    self._scale_events.append(ScaleEvent(from_x, to_x, to_w))
 
   def join(self, from_x:float, to_x:float, to_assembly:"Bundle", index:int=-1):
     """Join assembly over a transition X range."""
@@ -491,7 +451,7 @@ class Lineage(ScalablePath):
 
   def compile_segments(self):
     """Converts events into geometry segments."""
-    self.computed_segments = []
+    self._computed_segments = []
     # Sort events by time
     self.membership_events.sort(key=lambda membership_event: membership_event.from_x)
     current_x = self.start_x
@@ -509,16 +469,18 @@ class Lineage(ScalablePath):
     event_index = 0
     # We assume a max width for the diagram logic or infinite
     max_x = self.end_x if self.end_x is not None else self.diagram.view_width
+
     while current_x < max_x:
       # Find next topology event
       next_event    = self.membership_events[event_index] if event_index < len(self.membership_events) else None
       end_segment_x = next_event.from_x if next_event else max_x
+
       # If lineage is independant
       if not is_dependent:
         # Create independent segment from current_x to end_segment_x
         # Collect shifts that happen in this range
         segment_shifts = []
-        for shift_event in self.shift_events:
+        for shift_event in self._shift_events:
           if shift_event.from_x >= current_x and shift_event.to_x <= end_segment_x:
             # Resolve dynamic target if needed
             resolved_y = None
@@ -542,16 +504,16 @@ class Lineage(ScalablePath):
             to_y   = center_in_bundle.imag,
           ))
           # Create the independent segment, it ends at the end of the transition
-          segment = IndependantSegment(
+          segment = IndependentSegment(
             diagram      = self.diagram,
             start_x      = current_x,
             start_y      = current_y,
             start_w      = self.start_w,
             end_x        = next_event.to_x,
             shift_events = segment_shifts,
-            scale_events = self.scale_events,
+            scale_events = self._scale_events,
           )
-          self.computed_segments.append(segment)
+          self._computed_segments.append(segment)
           # Update state
           current_x      = next_event.to_x
           current_bundle = bundle
@@ -561,16 +523,16 @@ class Lineage(ScalablePath):
         else:
           # No next event
           # Independent segment until the end of the lineage
-          segment = IndependantSegment(
+          segment = IndependentSegment(
             diagram      = self.diagram,
             start_x      = current_x,
             start_y      = current_y,
             start_w      = self.start_w,
             end_x        = end_segment_x,
             shift_events = segment_shifts,
-            scale_events = self.scale_events,
+            scale_events = self._scale_events,
           )
-          self.computed_segments.append(segment)
+          self._computed_segments.append(segment)
           current_x = end_segment_x
           # Update current_y based on last shift
           if segment_shifts:
@@ -580,14 +542,14 @@ class Lineage(ScalablePath):
         # Dependent lineage (inside a bundle)
         if next_event and next_event.type == MembershipEventType.LEAVE:
           # Segment from current_x to leave event start
-          segment = DependantSegment(
+          segment = DependentSegment(
             diagram = self.diagram,
             bundle  = current_bundle,
             lineage = self,
             start_x = current_x,
             end_x   = next_event.from_x,
           )
-          self.computed_segments.append(segment)
+          self._computed_segments.append(segment)
           # Get the center point of the lineage inside the bundle when it leaves
           center_in_bundle = current_bundle.get_center_point_of_member_at(next_event.from_x + 1e-3, self)
           # Create a new independent segment that starts at the bundle position and shifts to the target Y
@@ -604,16 +566,16 @@ class Lineage(ScalablePath):
             to_y   = resolved_target_y if resolved_target_y is not None else 0.0,
           )
           # This segment starts at the start of the transition
-          leave_seg = IndependantSegment(
+          leave_seg = IndependentSegment(
             diagram      = self.diagram,
             start_x      = next_event.from_x,
             start_y      = center_in_bundle.imag,
             start_w      = self.start_w,
             end_x        = next_event.to_x,
             shift_events = [transition_shift],
-            scale_events = self.scale_events,
+            scale_events = self._scale_events,
           )
-          self.computed_segments.append(leave_seg)
+          self._computed_segments.append(leave_seg)
           # Update state
           current_x      = next_event.to_x
           current_y      = next_event.target_y
@@ -622,14 +584,14 @@ class Lineage(ScalablePath):
           event_index   += 1
         else:
           # Dependent until the end of the lineage
-          segment = DependantSegment(
+          segment = DependentSegment(
             diagram = self.diagram,
             bundle  = current_bundle,
             lineage = self,
             start_x = current_x,
             end_x   = max_x,
           )
-          self.computed_segments.append(segment)
+          self._computed_segments.append(segment)
           break
 
   def draw(self):
@@ -638,11 +600,13 @@ class Lineage(ScalablePath):
     upper_points = []
     lower_points = []
     # Gather points from all compiled segments
-    for segment in self.computed_segments:
+    for segment in self._computed_segments:
       segment_upper_points, segment_lower_points = segment.compile()
       upper_points.extend(segment_upper_points)
       lower_points.extend(segment_lower_points)
+
     if not upper_points: return ""
+
     # Construct SVG Path
     shape_path_d = f"M {upper_points[0].real} {upper_points[0].imag}"
     for upper_point in upper_points[1:]:
@@ -650,5 +614,6 @@ class Lineage(ScalablePath):
     for lower_point in reversed(lower_points):
       shape_path_d += f" L {lower_point.real} {lower_point.imag}"
     shape_path_d += " Z"
+
     shape_path_svg = f'<path fill="{self.color}" stroke="none" d="{shape_path_d}"/>'
     return shape_path_svg

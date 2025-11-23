@@ -1,5 +1,4 @@
-import svgpathtools as svg
-import numpy        as np
+import numpy as np
 
 from typing import TYPE_CHECKING
 
@@ -13,36 +12,38 @@ if TYPE_CHECKING:
 class Segment:
   """Base class for compiled segments ready to draw."""
   def __init__(self, diagram: "Diagram"):
-    self.diagram      = diagram
-    self.upper_points = []
-    self.lower_points = []
+    self.diagram       = diagram
+    self._upper_points = []
+    self._lower_points = []
 
-class IndependantSegment(Segment, ShiftablePath, ScalablePath):
+class IndependentSegment(Segment, ShiftablePath, ScalablePath):
   """Segment that calculates its own geometry based on compiled shifts."""
   def __init__(
       self,
-      diagram: "Diagram",
-      start_x: float,
-      start_y: float,
-      start_w: float,
-      end_x:   float,
+      diagram:      "Diagram",
+      start_x:      float,
+      start_y:      float,
+      start_w:      float,
+      end_x:        float,
       shift_events: list[ShiftEvent],
       scale_events: list[ScaleEvent],
     ):
     super().__init__(diagram)
-    self.start_x = start_x
-    self.start_y = start_y
-    self.start_w = start_w
-    self.end_x   = end_x
-    self.shift_events = shift_events
-    self.scale_events = scale_events
+    self.start_x      = start_x
+    self.start_y      = start_y
+    self.start_w      = start_w
+    self.end_x        = end_x
+    self._shift_events = shift_events
+    self._scale_events = scale_events
 
-  def compile(self) -> tuple[list[complex],list[complex]]:
+  def compile(self) -> tuple[list[complex], list[complex]]:
     """Compile the segment and return the lists of upper and lower points of the shape."""
     baseline_path = self.get_baseline_path()
+
     # Handle degenerate case: Point-like segment
     if len(baseline_path) == 0:
       return ([], [])
+
     # Work step by step at the configured resolution
     for t in np.linspace(0, 1, self.diagram.resolution):
       try:
@@ -50,21 +51,25 @@ class IndependantSegment(Segment, ShiftablePath, ScalablePath):
         point  = baseline_path.point(t)
         normal = baseline_path.normal(t)
         width  = self.get_width_at(point.real)
+
         # Offset lines above and bellow the baseline
-        upper_offset =  width/2
-        lower_offset = -width/2
+        upper_offset =  width / 2
+        lower_offset = -width / 2
+
         # Compute the position of the points of the upper and lower edges
         upper_point = point + normal * upper_offset
         lower_point = point + normal * lower_offset
+
         # ToDo reimplement back-filtering here
-        self.upper_points.append(upper_point)
-        self.lower_points.append(lower_point)
+        self._upper_points.append(upper_point)
+        self._lower_points.append(lower_point)
       except AssertionError:
         # Fallback for rare edge cases in svgpathtools
         continue
-    return (self.upper_points, self.lower_points)
 
-class DependantSegment(Segment):
+    return (self._upper_points, self._lower_points)
+
+class DependentSegment(Segment):
   """Segment whose points are computed by a bundle."""
   def __init__(
       self,

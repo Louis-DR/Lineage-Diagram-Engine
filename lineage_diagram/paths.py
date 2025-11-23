@@ -46,30 +46,34 @@ class PathBase:
 
 class ShiftablePath(PathBase):
   """Path with Y position that can shift."""
-  start_y:      float
-  shift_events: list[ShiftEvent]
+  start_y:       float
+  _shift_events: list[ShiftEvent]
 
   def get_baseline_path(self) -> svg.Path:
     """Generate the baseline SVG path of the object."""
     baseline_path = svg.Path()
     last_point    = complex(self.start_x, self.start_y)
+
     # Sort events by time
-    self.shift_events.sort(key=lambda shift_event: shift_event.from_x)
+    self._shift_events.sort(key=lambda shift_event: shift_event.from_x)
+
     # Iterate over shift events in order
-    for shift in self.shift_events:
+    for shift in self._shift_events:
       start_shift_point = complex(shift.from_x, last_point.imag)
+
       # Add line from previous shift if not touching
       if start_shift_point != last_point:
         baseline_path.append(svg.Line(last_point, start_shift_point))
+
       # Compute control points
       # The shift.to_y may be resolved dynamically upstream (in Lineage.compile_segments())
       resolved_to_y = shift.to_y
+
       # Apply the shift logic using the resolved coordinate
-      end_shift_y = (resolved_to_y if resolved_to_y is not None else 0.0) + shift.offset_y
-      # Assuming creating code put the base Y in to_y
       end_shift_y = (resolved_to_y if resolved_to_y is not None else 0.0) + shift.offset_y
       end_shift_point = complex(shift.to_x, end_shift_y)
       shift_midpoint_x = (start_shift_point.real + end_shift_point.real) / 2
+
       # Add cubic Bezier curve corresponding to the shift transformation
       if start_shift_point != end_shift_point:
         baseline_path.append(svg.CubicBezier(
@@ -78,32 +82,39 @@ class ShiftablePath(PathBase):
           complex(shift_midpoint_x, end_shift_point.imag),
           end_shift_point
         ))
+
       # Update the last point
       last_point = end_shift_point
+
     # Line to the end of the object
     # Use a large number if end_x is not defined (infinite existence)
     effective_end_x = self.end_x if self.end_x is not None else 999999.0
     end_point = complex(effective_end_x, last_point.imag)
+
     if end_point != last_point:
       baseline_path.append(svg.Line(last_point, end_point))
+
     return baseline_path
 
 class ScalablePath(PathBase):
   """Path with X width that can scale."""
-  start_w:      float
-  scale_events: list[ScaleEvent]
+  start_w:       float
+  _scale_events: list[ScaleEvent]
 
   def get_width_at(self, x: float) -> float:
     """Get the width of the object at X position."""
     # If the object has ended, its width is 0
     if self.end_x is not None and x > self.end_x:
       return 0.0
+
     # Initial width of the object
     last_width = self.start_w
+
     # Sort events by time
-    self.scale_events.sort(key=lambda scale_event: scale_event.from_x)
+    self._scale_events.sort(key=lambda scale_event: scale_event.from_x)
+
     # Iterate over scale transformations in order
-    for scale_event in self.scale_events:
+    for scale_event in self._scale_events:
       # Before transformation, return width of previous transformation
       if x <= scale_event.from_x:
         return last_width
@@ -119,5 +130,6 @@ class ScalablePath(PathBase):
       # After transformation, continue to next one
       else:
         last_width = scale_event.to_w
+
     # Reached the end, return width of last transformation
     return last_width
