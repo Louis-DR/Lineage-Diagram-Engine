@@ -211,6 +211,40 @@ class Lineage(ScalablePath):
       child         = cls(diagram, color, start_x, start_y, start_w)
       layout_base_y = start_y
 
+    # Sort parents by Y position at merge_from_x
+    # We need to resolve their Y position at merge_from_x
+    def get_parent_y(parent: "Lineage") -> float:
+      # Check bundle state
+      parent_bundle = None
+      for membership_event in sorted(parent.membership_events, key=lambda event: event.from_x):
+        if membership_event.from_x <= merge_from_x:
+          if membership_event.type == MembershipEventType.JOIN:
+            parent_bundle = membership_event.assembly
+          elif membership_event.type == MembershipEventType.LEAVE:
+            parent_bundle = None
+
+      if parent_bundle is None and parent._initial_bundle:
+         has_left = False
+         for membership_event in parent.membership_events:
+           if membership_event.type == MembershipEventType.LEAVE and membership_event.from_x <= merge_from_x:
+             has_left = True
+             break
+         if not has_left:
+           parent_bundle = parent._initial_bundle
+
+      if parent_bundle:
+        center = parent_bundle.get_center_point_of_member_at(merge_from_x, parent)
+        return center.imag
+      else:
+        # Independent
+        current_y = parent.start_y
+        for shift in parent._shift_events:
+          if shift.to_x <= merge_from_x:
+            current_y = shift.to_y
+        return current_y
+
+    parents.sort(key=get_parent_y)
+
     # Calculate layout
     parent_target_widths, parent_centers = cls._calculate_merge_layout(
       parents, merge_from_x, start_x, layout_base_y, start_w
@@ -288,6 +322,20 @@ class Lineage(ScalablePath):
       - in_bundle: Bundle (optional)
       - index: int (optional, for bundle)
     """
+    # Sort children specs by target_y (or index if in bundle)
+    # If target_y is not present (e.g. in bundle), we might use index or default to 0
+    # For independent, target_y is key.
+    def get_child_y(spec):
+        if 'target_y' in spec:
+            return spec['target_y']
+        if 'index' in spec:
+            # Proxy for Y order in bundle? Lower index usually higher up?
+            # Or just use 0
+            return spec['index']
+        return 0
+
+    children_specs.sort(key=get_child_y)
+
     # 1. Get parent state at start_x
     parent_w = self.get_width_at(start_x)
 
@@ -366,6 +414,188 @@ class Lineage(ScalablePath):
     self.terminate_at(start_x)
 
     return children
+
+  @classmethod
+  def create_split_from(
+      cls,
+      parent:                 "Lineage",
+      start_x:                float,
+      split_to_x:             float,
+      new_color:              str,
+      new_target_w:           float,
+      new_target_y:           float = 0.0,
+      continuing_target_w:    float = 0.0,
+      continuing_target_y:    float = 0.0,
+      new_in_bundle:          "Bundle" = None,
+      continuing_in_bundle:   "Bundle" = None,
+      new_index:              int = -1,
+      continuing_index:       int = -1,
+    ) -> "Lineage":
+    """
+    Split a new lineage from parent, while parent continues.
+    """
+    # 1. Get parent state at start_x
+    parent_w = parent.get_width_at(start_x)
+
+    # 2. Prepare specs for sorting
+    continuing_spec = {
+        'type': 'continuing',
+        'target_w': continuing_target_w,
+        'target_y': continuing_target_y,
+        'in_bundle': continuing_in_bundle,
+        'index': continuing_index
+    }
+    new_spec = {
+        'type': 'new',
+        'target_w': new_target_w,
+        'target_y': new_target_y,
+        'in_bundle': new_in_bundle,
+        'index': new_index,
+        'color': new_color
+    }
+
+    children_specs = [continuing_spec, new_spec]
+
+    # Sort based on target Y
+    def get_spec_y(spec):
+        if spec['in_bundle']:
+            # If in bundle, use index as proxy? Or 0?
+            return spec['index']
+        return spec['target_y']
+
+    children_specs.sort(key=get_spec_y)
+
+    children_target_widths = [spec['target_w'] for spec in children_specs]
+
+    children_start_widths, children_start_centers_relative = cls._calculate_split_layout(
+      parent_w, 0, children_target_widths
+    )
+
+    # 3. Resolve parent Y at start_x
+    parent_bundle = None
+    if parent._initial_bundle:
+       parent_bundle = parent._initial_bundle
+
+    for membership_event in sorted(parent.membership_events, key=lambda event: event.from_x):
+      if membership_event.from_x <= start_x:
+        if membership_event.type == MembershipEventType.JOIN:
+          parent_bundle = membership_event.assembly
+        elif membership_event.type == MembershipEventType.LEAVE:
+          parent_bundle = None
+
+    parent_y_at_start = parent.start_y
+    if parent_bundle:
+      center_in_bundle  = parent_bundle.get_center_point_of_member_at(start_x, parent)
+      parent_y_at_start = center_in_bundle.imag
+    else:
+      current_y = parent.start_y
+      for shift in parent._shift_events:
+        if shift.to_x <= start_x:
+          current_y = shift.to_y
+      parent_y_at_start = current_y
+
+    # 4. Apply changes
+    new_lineage = None
+
+    for spec, start_w, start_center_rel in zip(children_specs, children_start_widths, children_start_centers_relative):
+        if spec['type'] == 'continuing':
+            # Update PARENT (Continuing)
+            # We transition directly from current state at start_x to target state at split_to_x.
+            # This avoids vertical line artifacts caused by instant shifts/scales.
+
+            # Width
+            parent.scale_to(start_x, split_to_x, spec['target_w'])
+
+            # Position
+            if spec['in_bundle']:
+                parent.join(start_x, split_to_x, spec['in_bundle'], spec['index'])
+            else:
+                parent.shift_to(start_x, split_to_x, spec['target_y'])
+
+        else:
+            # Create NEW Lineage
+            new_start_w = start_w
+            new_start_y = parent_y_at_start + start_center_rel
+
+            new_lineage = cls(parent.diagram, spec['color'], start_x, new_start_y, new_start_w)
+            new_lineage.scale_to(start_x, split_to_x, spec['target_w'])
+
+            if spec['in_bundle']:
+                new_lineage.join(start_x, split_to_x, spec['in_bundle'], spec['index'])
+            else:
+                new_lineage.shift_to(start_x, split_to_x, spec['target_y'])
+
+    return new_lineage
+
+  def merge_into(
+      self,
+      target_lineage: "Lineage",
+      merge_from_x:   float,
+      end_x:          float,
+      target_w:       float,
+      target_y:       float = 0.0,
+      in_bundle:      "Bundle" = None, # Not used logic-wise for target? Or maybe?
+    ):
+    """
+    Merge this lineage into target_lineage. target_lineage continues.
+    """
+    # 1. Sort parents by Y position at merge_from_x
+    parents = [self, target_lineage]
+
+    def get_parent_y(parent: "Lineage") -> float:
+      # Check bundle state
+      parent_bundle = None
+      for membership_event in sorted(parent.membership_events, key=lambda event: event.from_x):
+        if membership_event.from_x <= merge_from_x:
+          if membership_event.type == MembershipEventType.JOIN:
+            parent_bundle = membership_event.assembly
+          elif membership_event.type == MembershipEventType.LEAVE:
+            parent_bundle = None
+
+      if parent_bundle is None and parent._initial_bundle:
+         has_left = False
+         for membership_event in parent.membership_events:
+           if membership_event.type == MembershipEventType.LEAVE and membership_event.from_x <= merge_from_x:
+             has_left = True
+             break
+         if not has_left:
+           parent_bundle = parent._initial_bundle
+
+      if parent_bundle:
+        center = parent_bundle.get_center_point_of_member_at(merge_from_x, parent)
+        return center.imag
+      else:
+        # Independent
+        current_y = parent.start_y
+        for shift in parent._shift_events:
+          if shift.to_x <= merge_from_x:
+            current_y = shift.to_y
+        return current_y
+
+    parents.sort(key=get_parent_y)
+
+    # Target spec defines the "child" (result) properties
+    child_start_w = target_w
+    child_target_y = target_y
+
+    # We need to calculate where they should be at `end_x` (the merge point).
+    parent_target_widths, parent_centers = self._calculate_merge_layout(
+      parents, merge_from_x, end_x, child_target_y, child_start_w
+    )
+
+    # 2. Apply updates
+    for parent, target_w_at_merge, center_at_merge in zip(parents, parent_target_widths, parent_centers):
+        if parent == self:
+            # Merging Lineage (Ends)
+            parent.scale_to(merge_from_x, end_x, target_w_at_merge)
+            parent.shift_to(merge_from_x, end_x, center_at_merge)
+            parent.terminate_at(end_x)
+        else:
+            # Continuing Lineage (Target)
+            # We transition from current state at merge_from_x to FINAL state at end_x.
+            # We skip the intermediate "packed" state to avoid vertical artifacts.
+            parent.scale_to(merge_from_x, end_x, child_start_w)
+            parent.shift_to(merge_from_x, end_x, child_target_y)
 
   def terminate_at(self, x:float):
     """Stop the lineage at X position."""
