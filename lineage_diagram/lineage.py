@@ -2,6 +2,7 @@ from typing import TYPE_CHECKING, Optional
 
 from .paths    import ScalablePath, ShiftEvent, ScaleEvent, MembershipEvent, MembershipEventType
 from .segments import IndependentSegment, DependentSegment
+from .utils      import smootherstep
 
 if TYPE_CHECKING:
   from .diagram import Diagram
@@ -39,7 +40,7 @@ class Lineage(ScalablePath):
 
     # Internal state for compilation
     self._initial_bundle = None
-    self.end_x          = None
+    self.end_x           = None
 
   @classmethod
   def create_in_bundle(
@@ -851,6 +852,38 @@ class Lineage(ScalablePath):
           self._computed_segments.append(segment)
           break
 
+  def _get_y_at(self, x: float) -> float:
+    """Resolve the Y position of the lineage at a specific X, handling shifts and bundles."""
+    # 1. Check bundle membership
+    parent_bundle = None
+    if self._initial_bundle:
+       parent_bundle = self._initial_bundle
+
+    for membership_event in sorted(self.membership_events, key=lambda event: event.from_x):
+      if membership_event.from_x <= x:
+        if membership_event.type == MembershipEventType.JOIN:
+          parent_bundle = membership_event.assembly
+        elif membership_event.type == MembershipEventType.LEAVE:
+          parent_bundle = None
+
+    if parent_bundle:
+      center_in_bundle = parent_bundle.get_center_point_of_member_at(x, self)
+      return center_in_bundle.imag
+
+    # 2. Independent: Interpolate shifts
+    current_y = self.start_y
+    for shift in self._shift_events:
+      if x >= shift.to_x:
+        current_y = shift.to_y
+      elif x > shift.from_x:
+        # Interpolate
+        duration = shift.to_x - shift.from_x
+        if duration > 1e-5:
+            ratio = (x - shift.from_x) / duration
+            factor = smootherstep(ratio)
+            current_y = current_y + (shift.to_y - current_y) * factor
+    return current_y
+
   @classmethod
   def create_from_lineage(
       cls,
@@ -869,29 +902,7 @@ class Lineage(ScalablePath):
     """
     # 1. Get parent state at start_x
     parent_w = parent.get_width_at(start_x)
-
-    # Resolve parent Y
-    parent_bundle = None
-    if parent._initial_bundle:
-       parent_bundle = parent._initial_bundle
-
-    for membership_event in sorted(parent.membership_events, key=lambda event: event.from_x):
-      if membership_event.from_x <= start_x:
-        if membership_event.type == MembershipEventType.JOIN:
-          parent_bundle = membership_event.assembly
-        elif membership_event.type == MembershipEventType.LEAVE:
-          parent_bundle = None
-
-    parent_y_at_start = parent.start_y
-    if parent_bundle:
-      center_in_bundle  = parent_bundle.get_center_point_of_member_at(start_x, parent)
-      parent_y_at_start = center_in_bundle.imag
-    else:
-      current_y = parent.start_y
-      for shift in parent._shift_events:
-        if shift.to_x <= start_x:
-          current_y = shift.to_y
-      parent_y_at_start = current_y
+    parent_y_at_start = parent._get_y_at(start_x)
 
     # 2. Determine start Y for new lineage (touching edge)
     # If new_target_y < parent_y_at_start (Above) -> Touch Top Edge (Lower Y)
@@ -933,42 +944,10 @@ class Lineage(ScalablePath):
     """
     # 1. Get target state at end_x
     target_w = target_lineage.get_width_at(end_x)
-
-    # Resolve target Y
-    target_bundle = None
-    if target_lineage._initial_bundle:
-       target_bundle = target_lineage._initial_bundle
-
-    for membership_event in sorted(target_lineage.membership_events, key=lambda event: event.from_x):
-      if membership_event.from_x <= end_x:
-        if membership_event.type == MembershipEventType.JOIN:
-          target_bundle = membership_event.assembly
-        elif membership_event.type == MembershipEventType.LEAVE:
-          target_bundle = None
-
-    target_y_at_end = target_lineage.start_y
-    if target_bundle:
-      center_in_bundle  = target_bundle.get_center_point_of_member_at(end_x, target_lineage)
-      target_y_at_end = center_in_bundle.imag
-    else:
-      current_y = target_lineage.start_y
-      for shift in target_lineage._shift_events:
-        if shift.to_x <= end_x:
-          current_y = shift.to_y
-      target_y_at_end = current_y
+    target_y_at_end = target_lineage._get_y_at(end_x)
 
     # 2. Get Self Y at transition_from_x
-    # We need to know if we are above or below target.
-    # We can check our current Y vs target Y.
-    # Or we can check our Y at transition_from_x.
-    # Let's estimate our Y.
-    self_y_at_start = self.start_y
-    # (Simplified check, assuming independent or we can track shifts)
-    # If we are in bundle, we might not know absolute Y easily without context.
-    # But usually we merge from independent.
-    for shift in self._shift_events:
-        if shift.to_x <= transition_from_x:
-            self_y_at_start = shift.to_y
+    self_y_at_start = self._get_y_at(transition_from_x)
 
     # 3. Determine end Y (touching edge)
     # We need self width at end_x to calculate center offset.
