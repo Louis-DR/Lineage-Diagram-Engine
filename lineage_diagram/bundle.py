@@ -73,10 +73,36 @@ class Bundle(ShiftablePath):
       fade_in_duration  = fade_in_duration,
       fade_out_duration = 0.0 # Will be set when/if the lineage leaves
     )
+
     if index == -1:
       self._memberships.append(new_membership)
     else:
-      self._memberships.insert(index, new_membership)
+      # Resolve relative index to global index based on active members
+      active_memberships = self.get_memberships_at(start_x)
+
+      if index >= len(active_memberships):
+        # Insert after the last active member
+        if active_memberships:
+          last_active = active_memberships[-1]
+          # Find insertion point (after last_active)
+          insert_pos = len(self._memberships)
+          for i, m in enumerate(self._memberships):
+            if m is last_active:
+              insert_pos = i + 1
+              break
+          self._memberships.insert(insert_pos, new_membership)
+        else:
+          # No active members, just append
+          self._memberships.append(new_membership)
+      else:
+        # Insert before the member at the specified relative index
+        target_member = active_memberships[index]
+        insert_pos = 0
+        for i, m in enumerate(self._memberships):
+          if m is target_member:
+            insert_pos = i
+            break
+        self._memberships.insert(insert_pos, new_membership)
 
   def shift_to(self, from_x:float, to_x:float, to_y:float):
     """Shift bundle to new Y position over X range."""
