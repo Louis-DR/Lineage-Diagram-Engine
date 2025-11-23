@@ -44,28 +44,51 @@ class IndependentSegment(Segment, ShiftablePath, ScalablePath):
     if len(baseline_path) == 0:
       return ([], [])
 
-    # Work step by step at the configured resolution
-    for t in np.linspace(0, 1, self.diagram.resolution):
-      try:
-        # Get parameters at this position alongside the path
-        point  = baseline_path.point(t)
-        normal = baseline_path.normal(t)
-        width  = self.get_width_at(point.real)
+    # Iterate over each segment in the path
+    for segment in baseline_path:
+        # Check if segment is vertical (jump)
+        start = segment.point(0)
+        end   = segment.point(1)
 
-        # Offset lines above and bellow the baseline
-        upper_offset =  width / 2
-        lower_offset = -width / 2
+        if abs(start.real - end.real) < 1e-5:
+            # Vertical segment (jump) - Skip
+            continue
 
-        # Compute the position of the points of the upper and lower edges
-        upper_point = point + normal * upper_offset
-        lower_point = point + normal * lower_offset
+        # Sample points along the segment
+        # We determine number of samples based on segment length relative to total resolution
+        # But for now, let's use a fixed density or minimum samples
+        # Simple approach: fixed samples per segment? Or proportional?
+        # Let's use proportional to length, but at least 2 (start and end)
+        seg_len = segment.length()
+        # Heuristic: 1 sample per unit? or based on diagram resolution?
+        # diagram.resolution is total samples.
+        # Let's just use a reasonable step.
+        num_samples = max(2, int(self.diagram.resolution * (seg_len / baseline_path.length())))
 
-        # ToDo reimplement back-filtering here
-        self._upper_points.append(upper_point)
-        self._lower_points.append(lower_point)
-      except AssertionError:
-        # Fallback for rare edge cases in svgpathtools
-        continue
+        for t in np.linspace(0, 1, num_samples):
+            point  = segment.point(t)
+            normal = segment.normal(t)
+
+            # Query width with epsilon nudge towards segment interior
+            # to handle discontinuities at endpoints correctly.
+            query_x = point.real
+            if t < 0.5:
+                query_x += 1e-5
+            else:
+                query_x -= 1e-5
+
+            width = self.get_width_at(query_x)
+
+            # Offset lines above and bellow the baseline
+            upper_offset =  width / 2
+            lower_offset = -width / 2
+
+            # Compute the position of the points of the upper and lower edges
+            upper_point = point + normal * upper_offset
+            lower_point = point + normal * lower_offset
+
+            self._upper_points.append(upper_point)
+            self._lower_points.append(lower_point)
 
     return (self._upper_points, self._lower_points)
 

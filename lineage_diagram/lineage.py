@@ -528,10 +528,27 @@ class Lineage(ScalablePath):
     for spec, start_w, start_center_rel in zip(children_specs, children_start_widths, children_start_centers_relative):
         if spec['type'] == 'parent':
             # Update PARENT (Parent)
-            # We transition directly from current state at start_x to target state at split_to_x.
-            # This avoids vertical line artifacts caused by instant shifts/scales.
+            # We need to transition from "Packed State" at start_x to "Target State" at split_to_x.
+            # BUT the parent is currently at "Original State" at start_x.
+            # So we must JUMP (0-duration) from Original to Packed at start_x.
 
-            # Width
+            packed_w = start_w
+            packed_y = parent_y_at_start + start_center_rel
+
+            # Jump to packed state at start_x
+            parent.scale_to(start_x, start_x, packed_w)
+
+            if spec['in_bundle']:
+                 # If jumping into a bundle instantly?
+                 # Usually parent continues in same context or switches.
+                 # If switching to bundle, we join.
+                 # If already in bundle, we might need to jump index?
+                 # For now, let's assume position jump is handled by shift/join logic.
+                 pass
+            else:
+                 parent.shift_to(start_x, start_x, packed_y)
+
+            # Transition to Target State
             parent.scale_to(start_x, split_to_x, spec['target_w'])
 
             # Position
@@ -542,6 +559,7 @@ class Lineage(ScalablePath):
 
         else:
             # Create NEW Lineage
+            # New lineage starts at Packed State at start_x.
             new_start_w = start_w
             new_start_y = parent_y_at_start + start_center_rel
 
@@ -624,10 +642,16 @@ class Lineage(ScalablePath):
             parent.terminate_at(end_x)
         else:
             # Parent Lineage (Target)
-            # We transition from current state at merge_from_x to FINAL state at end_x.
-            # We skip the intermediate "packed" state to avoid vertical artifacts.
-            parent.scale_to(merge_from_x, end_x, child_start_w)
-            parent.shift_to(merge_from_x, end_x, child_target_y)
+            # We need to transition from "Original State" at merge_from_x to "Packed State" at end_x.
+            # THEN jump (0-duration) to "Target State" at end_x.
+
+            # Transition to Packed State
+            parent.scale_to(merge_from_x, end_x, target_w_at_merge)
+            parent.shift_to(merge_from_x, end_x, center_at_merge)
+
+            # Jump to Target State at end_x
+            parent.scale_to(end_x, end_x, child_start_w)
+            parent.shift_to(end_x, end_x, child_target_y)
 
   def terminate_at(self, x:float):
     """Stop the lineage at X position."""
