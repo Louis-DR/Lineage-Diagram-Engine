@@ -2,7 +2,7 @@ import svgpathtools as svg
 
 from dataclasses import dataclass
 from enum        import Enum
-from typing      import Optional, TYPE_CHECKING
+from typing      import Optional, TYPE_CHECKING, Any
 
 from .utils      import smootherstep
 
@@ -20,12 +20,18 @@ class MembershipEvent:
   type:     MembershipEventType
   assembly: Optional['Bundle'] = None
   target_y: Optional[float]    = None # For leave events
+  # Optional dynamic target: leave to this lineage's position + offset
+  target_lineage: Optional['Any'] = None
+  offset_y:       float           = 0.0
 
 @dataclass
 class ShiftEvent:
   from_x: float
   to_x:   float
-  to_y:   float
+  to_y:   Optional[float] = None
+  # Optional dynamic target: shift to this lineage's position + offset
+  target_lineage: Optional['Any'] = None
+  offset_y:       float           = 0.0
 
 @dataclass
 class ScaleEvent:
@@ -56,7 +62,13 @@ class ShiftablePath(PathBase):
       if start_shift_point != last_point:
         baseline_path.append(svg.Line(last_point, start_shift_point))
       # Compute control points
-      end_shift_point = complex(shift.to_x, shift.to_y)
+      # The shift.to_y may be resolved dynamically upstream (in Lineage.compile_segments())
+      resolved_to_y = shift.to_y
+      # Apply the shift logic using the resolved coordinate
+      end_shift_y = (resolved_to_y if resolved_to_y is not None else 0.0) + shift.offset_y
+      # Assuming creating code put the base Y in to_y
+      end_shift_y = (resolved_to_y if resolved_to_y is not None else 0.0) + shift.offset_y
+      end_shift_point = complex(shift.to_x, end_shift_y)
       shift_midpoint_x = (start_shift_point.real + end_shift_point.real) / 2
       # Add cubic Bezier curve corresponding to the shift transformation
       if start_shift_point != end_shift_point:

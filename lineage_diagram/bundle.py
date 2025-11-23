@@ -119,7 +119,8 @@ class Bundle(ShiftablePath):
         correction  = min(gaps[index], end_excess)
         gaps[index] -= correction
         end_excess  -= correction
-      # Add a zero to make the list lengths match
+    # Add a zero to make the list lengths match
+    if count > 0:
       gaps.append(0)
     return effective_widths, gaps
 
@@ -156,17 +157,17 @@ class Bundle(ShiftablePath):
         # Update bundle offset
         current_offset += member_width + member_gap
 
-  def get_center_point_of_member_at(self, x:float, lineage:"Lineage") -> complex:
-    """Finds the geometric center of the lineage within the bundle at position X."""
-    # Find position alongside path corresponding to X
+  def _get_member_geometry_at(self, x:float, lineage:"Lineage") -> tuple[complex, complex]:
+    """Calculate the upper and lower points of a member at a specific X."""
     baseline_path  = self.get_baseline_path()
     t              = find_t_at_x(baseline_path, x)
     # Get parameters at this position alongside the path
     point          = baseline_path.point(t)
     normal         = baseline_path.normal(t)
-    memberships    = self.get_memberships_at(x)
+    x_on_path      = point.real
+    memberships    = self.get_memberships_at(x_on_path)
     # Get the widths and gaps
-    widths, gaps   = self._calculate_layout(memberships, x)
+    widths, gaps   = self._calculate_layout(memberships, x_on_path)
     # Total bundle width
     bundle_width   = sum(widths) + sum(gaps)
     # Initial offset, start at the top
@@ -176,12 +177,19 @@ class Bundle(ShiftablePath):
       # If found the requested lineage
       if membership.lineage == lineage:
         # Then return the position of its center
-        return point + normal * (current_offset + member_width/2)
+        upper_point = point + normal * (current_offset + member_width)
+        lower_point = point + normal * current_offset
+        return upper_point, lower_point
       # Else update the bundle offset
       current_offset += member_width + member_gap
     # Lineage not found, fallback to bundle center
     print(f"ERROR: Lineage not found in bundle at {x=}.")
-    return point
+    return point, point
+
+  def get_center_point_of_member_at(self, x:float, lineage:"Lineage") -> complex:
+    """Finds the geometric center of the lineage within the bundle at position X."""
+    upper, lower = self._get_member_geometry_at(x, lineage)
+    return (upper + lower) / 2
 
   def get_compiled_points_for(
       self,
@@ -196,8 +204,22 @@ class Bundle(ShiftablePath):
       print("ERROR: No precompiled points this lineage in the bundle.")
       return ([], [])
     all_upper_points, all_lower_points = self.compiled_member_points[lineage]
+
     # Filter points within x range
     # ToDo replace with bisect or numpy masking for performance
     filtered_upper_points = [upper_point for upper_point in all_upper_points if start_x <= upper_point.real <= end_x]
     filtered_lower_points = [lower_point for lower_point in all_lower_points if start_x <= lower_point.real <= end_x]
+
+    # Interpolate start if missing
+    if not filtered_upper_points or filtered_upper_points[0].real > start_x + 1e-5:
+      upper_point, lower_point = self._get_member_geometry_at(start_x, lineage)
+      filtered_upper_points.insert(0, upper_point)
+      filtered_lower_points.insert(0, lower_point)
+
+    # Interpolate end if missing
+    if not filtered_upper_points or filtered_upper_points[-1].real < end_x - 1e-5:
+      upper_point, lower_point = self._get_member_geometry_at(end_x, lineage)
+      filtered_upper_points.append(upper_point)
+      filtered_lower_points.append(lower_point)
+
     return filtered_upper_points, filtered_lower_points

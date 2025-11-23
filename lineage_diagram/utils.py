@@ -28,7 +28,7 @@ def find_t_at_x(
   # Refine with binary search around the best coarse t
   low  = max(0, best_t - 0.01)
   high = min(1, best_t + 0.01)
-  for _ in range(10):
+  for _ in range(20):
     mid   = (low + high) / 2
     point = path.point(mid)
     if point.real < target_x:
