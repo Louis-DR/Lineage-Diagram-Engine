@@ -114,7 +114,7 @@ class Bundle(ShiftablePath):
 
   def get_memberships_at(self, x:float) -> list[BundleMembership]:
     """Return memberships active at X, sorted by insertion order."""
-    return [membership for membership in self._memberships if membership.start_x <= x <= membership.end_x]
+    return [membership for membership in self._memberships if membership.start_x <= x + 1e-5 and x <= membership.end_x + 1e-5]
 
   def _get_factor(self, membership:BundleMembership, x:float) -> float:
     """Calculate the presence factor (0 to 1) of a member at position X."""

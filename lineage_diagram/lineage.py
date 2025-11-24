@@ -41,6 +41,7 @@ class Lineage(ScalablePath):
     # Internal state for compilation
     self._initial_bundle = None
     self.end_x           = None
+    self.visual_end_x    = None  # Controls when to stop drawing (independent of width calculations)
 
   @classmethod
   def create_in_bundle(
@@ -438,8 +439,53 @@ class Lineage(ScalablePath):
 
       children.append(child)
 
-    # Terminate parent
-    self.terminate_at(start_x)
+    # Handle parent leaving bundle if applicable
+    if parent_bundle:
+      # We manually update the membership to fade out the parent from the bundle
+      # This ensures the space is reclaimed smoothly while the children fade in.
+      parent_index = -1
+      for i, membership in enumerate(parent_bundle.memberships):
+        if membership.lineage == self and membership.start_x <= start_x <= membership.end_x:
+          membership.end_x             = split_to_x
+          membership.fade_out_duration = split_to_x - start_x
+          parent_index = i
+          break
+
+      # Sandwich Logic:
+      # To prevent layout jumps, we insert children around the parent.
+      # Half before, half after.
+      # This ensures the gap loss at the boundaries (Neighbor <-> Child) is compensated
+      # by the internal gaps (Child <-> Parent).
+      if parent_index != -1:
+          mid_point = len(children_specs) // 2
+
+          # First half: insert at parent_index (shifting parent down)
+          # We iterate backwards to keep order: C1, C2, P
+          # Wait, if we insert at K, item at K moves to K+1.
+          # If we want C1, C2, P.
+          # Insert C2 at K. -> C2, P.
+          # Insert C1 at K. -> C1, C2, P.
+          # So we iterate backwards through the first half.
+          for i in range(mid_point - 1, -1, -1):
+              children_specs[i]['index'] = parent_index
+
+          # Second half: insert after parent.
+          # Parent is now at parent_index + mid_point.
+          # We want C3, C4 after P.
+          # Insert C3 at P_index + 1.
+          # Insert C4 at P_index + 2.
+          current_offset = 1
+          for i in range(mid_point, len(children_specs)):
+              children_specs[i]['index'] = parent_index + mid_point + current_offset
+              current_offset += 1
+
+      # Visual termination: stop drawing at start_x (clean cut)
+      # But keep end_x at split_to_x for bundle layout calculations
+      self.visual_end_x = start_x
+      self.end_x = split_to_x
+    else:
+      # Independent split: terminate instantly to avoid overlap
+      self.terminate_at(start_x)
 
     return children
 
@@ -756,10 +802,17 @@ class Lineage(ScalablePath):
     # We assume a max width for the diagram logic or infinite
     max_x = self.end_x if self.end_x is not None else self.diagram.view_width
 
+    # For drawing segments, respect visual_end_x if set (for clean cuts)
+    visual_max_x = self.visual_end_x if self.visual_end_x is not None else max_x
+    drawing_max_x = min(max_x, visual_max_x)
+
     while current_x < max_x:
       # Find next topology event
       next_event    = self.membership_events[event_index] if event_index < len(self.membership_events) else None
       end_segment_x = next_event.from_x if next_event else max_x
+
+      # Clamp to drawing_max_x for visual cutoff
+      end_segment_x = min(end_segment_x, drawing_max_x)
 
       # If lineage is independant
       if not is_dependent:
@@ -795,7 +848,7 @@ class Lineage(ScalablePath):
             start_x      = current_x,
             start_y      = current_y,
             start_w      = self.start_w,
-            end_x        = next_event.to_x,
+            end_x        = min(next_event.to_x, drawing_max_x),
             shift_events = segment_shifts,
             scale_events = self._scale_events,
           )
@@ -814,7 +867,7 @@ class Lineage(ScalablePath):
             start_x      = current_x,
             start_y      = current_y,
             start_w      = self.start_w,
-            end_x        = end_segment_x,
+            end_x        = min(end_segment_x, drawing_max_x),
             shift_events = segment_shifts,
             scale_events = self._scale_events,
           )
@@ -833,7 +886,7 @@ class Lineage(ScalablePath):
             bundle  = current_bundle,
             lineage = self,
             start_x = current_x,
-            end_x   = next_event.from_x,
+            end_x   = min(next_event.from_x, drawing_max_x),
           )
           self._computed_segments.append(segment)
           # Get the center point of the lineage inside the bundle when it leaves
@@ -857,7 +910,7 @@ class Lineage(ScalablePath):
             start_x      = next_event.from_x,
             start_y      = center_in_bundle.imag,
             start_w      = self.start_w,
-            end_x        = next_event.to_x,
+            end_x        =min(next_event.to_x, drawing_max_x),
             shift_events = [transition_shift],
             scale_events = self._scale_events,
           )
@@ -875,7 +928,7 @@ class Lineage(ScalablePath):
             bundle  = current_bundle,
             lineage = self,
             start_x = current_x,
-            end_x   = max_x,
+            end_x   = min(max_x, drawing_max_x),
           )
           self._computed_segments.append(segment)
           break
