@@ -1,6 +1,7 @@
 from lineage_diagram.diagram import Diagram
 from lineage_diagram.lineage import Lineage
 from lineage_diagram.bundle  import Bundle
+from lineage_diagram.orbit   import Orbit
 
 diagram = Diagram(view_width=2000, view_height=1250, resolution=1000)
 
@@ -49,6 +50,7 @@ line_successive.scale_to(from_x=1920, to_x=1970, to_w=100)
 # -----------------------------------------------------------------------------
 # 2. Overlapping Transformations
 # -----------------------------------------------------------------------------
+
 line_overlapping = Lineage(
     diagram = diagram,
     color   = color_red,
@@ -89,6 +91,7 @@ line_overlapping.scale_to(from_x=1960, to_x=1970, to_w=40)
 # -----------------------------------------------------------------------------
 # 3. Trunk and Branches
 # -----------------------------------------------------------------------------
+
 line_trunk = Lineage(
     diagram = diagram,
     color   = color_green,
@@ -177,6 +180,7 @@ line_branch_6.end_at_lineage(target_lineage=line_trunk, transition_from_x=1600, 
 # -----------------------------------------------------------------------------
 # 4. Generations (Split & Merge)
 # -----------------------------------------------------------------------------
+
 line_gen1 = Lineage(
     diagram = diagram,
     color   = color_yellow,
@@ -281,6 +285,7 @@ line_gen7.shift_to(from_x=1700, to_x=1800, to_y=400)
 # -----------------------------------------------------------------------------
 # 5. Simple Bundle
 # -----------------------------------------------------------------------------
+
 simple_bundle = Bundle(diagram, start_x=0, start_y=500, margin=3)
 
 simple_bundle_line_1 = Lineage.create_in_bundle(
@@ -369,6 +374,7 @@ simple_bundle_line_2.terminate_at(2000)
 # -----------------------------------------------------------------------------
 # 6. Host Bundle (Join & Leave)
 # -----------------------------------------------------------------------------
+
 host_bundle = Bundle(diagram, start_x=0, start_y=600, margin=3)
 
 host_bundle_line_1 = Lineage.create_in_bundle(
@@ -435,6 +441,7 @@ host_bundle_line_3.terminate_at(2000)
 # -----------------------------------------------------------------------------
 # 7. Split & Merge Cycles
 # -----------------------------------------------------------------------------
+
 source_line = Lineage(diagram, color_white, 0, 675, 40)
 
 # Cycle 1
@@ -531,6 +538,7 @@ merged_line = Lineage.create_from_merge(
 # -----------------------------------------------------------------------------
 # 8. Continuing Splits
 # -----------------------------------------------------------------------------
+
 source_line = Lineage(diagram, color_white, 0, 800, 40)
 
 # Split 1
@@ -618,6 +626,7 @@ source_line.terminate_at(2000)
 # -----------------------------------------------------------------------------
 # 9. Merge and split inside bundle
 # -----------------------------------------------------------------------------
+
 host_bundle = Bundle(diagram, start_x=0, start_y=875, margin=3)
 
 host_bundle_line_1 = Lineage.create_in_bundle(
@@ -917,6 +926,7 @@ host_bundle_line_4, host_bundle_line_3 = host_bundle_merged_line_3.split(
 # -----------------------------------------------------------------------------
 # 9. Merge and split to/from bundle
 # -----------------------------------------------------------------------------
+
 host_bundle = Bundle(diagram, start_x=0, start_y=1000, margin=3)
 
 host_bundle_line_1 = Lineage.create_in_bundle(
@@ -1172,6 +1182,88 @@ host_bundle_line_3, host_bundle_line_2 = merged_line_8.split(
     ]
 )
 host_bundle_line_3.join(from_x=1800, to_x=1850, to_assembly=host_bundle, index=2)
+
+
+
+
+
+# -----------------------------------------------------------------------------
+# 10. Orbit
+# -----------------------------------------------------------------------------
+
+main_line = Lineage(
+    diagram = diagram,
+    color   = color_white,
+    start_x = 0,
+    start_y = 1100,
+    start_w = 20
+)
+
+satellite_line_1 = Lineage(
+    diagram = diagram,
+    color   = color_blue,
+    start_x = 0,
+    start_y = 1050,
+    start_w = 5
+)
+satellite_line_2 = Lineage(
+    diagram = diagram,
+    color   = color_red,
+    start_x = 0,
+    start_y = 1060,
+    start_w = 5
+)
+satellite_line_3 = Lineage(
+    diagram = diagram,
+    color   = color_green,
+    start_x = 0,
+    start_y = 1140,
+    start_w = 5
+)
+satellite_line_4 = Lineage(
+    diagram = diagram,
+    color   = color_yellow,
+    start_x = 0,
+    start_y = 1150,
+    start_w = 5
+)
+
+orbit = Orbit(diagram, main_line, margin=3)
+
+satellite_line_1.join(from_x=150, to_x=200, to_assembly=orbit, index=+2)
+satellite_line_2.join(from_x=100, to_x=150, to_assembly=orbit, index=+1)
+satellite_line_3.join(from_x=100, to_x=150, to_assembly=orbit, index=-1)
+satellite_line_4.join(from_x=150, to_x=200, to_assembly=orbit, index=-2)
+
+main_line.scale_to(from_x=250, to_x=300, to_w=5)
+main_line.scale_to(from_x=350, to_x=400, to_w=40)
+main_line.scale_to(from_x=450, to_x=500, to_w=20)
+
+satellite_line_2.scale_to(from_x=550, to_x=600, to_w=20)
+satellite_line_1.scale_to(from_x=600, to_x=650, to_w=20)
+satellite_line_1.scale_to(from_x=700, to_x=750, to_w=5)
+satellite_line_2.scale_to(from_x=700, to_x=750, to_w=5)
+
+satellite_line_3.scale_to(from_x=750, to_x=800, to_w=20)
+satellite_line_4.scale_to(from_x=800, to_x=850, to_w=20)
+satellite_line_4.scale_to(from_x=900, to_x=950, to_w=5)
+satellite_line_3.scale_to(from_x=900, to_x=950, to_w=5)
+
+main_line.shift_to(from_x=1000, to_x=1050, to_y=1070)
+main_line.shift_to(from_x=1100, to_x=1200, to_y=1130)
+main_line.shift_to(from_x=1250, to_x=1300, to_y=1100)
+
+satellite_line_2.leave(from_x=1350, to_x=1400, from_assembly=orbit, to_y=1050)
+satellite_line_3.leave(from_x=1350, to_x=1400, from_assembly=orbit, to_y=1150)
+
+satellite_line_1.leave(from_x=1400, to_x=1450, from_assembly=orbit, to_y=1060)
+satellite_line_4.leave(from_x=1400, to_x=1450, from_assembly=orbit, to_y=1140)
+
+satellite_line_1.join(from_x=1500, to_x=1550, to_assembly=orbit, index=-1)
+satellite_line_4.join(from_x=1500, to_x=1550, to_assembly=orbit, index=+1)
+
+satellite_line_2.join(from_x=1550, to_x=1600, to_assembly=orbit, index=-1)
+satellite_line_3.join(from_x=1550, to_x=1600, to_assembly=orbit, index=+1)
 
 
 

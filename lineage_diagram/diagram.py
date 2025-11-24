@@ -3,6 +3,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
   from .lineage import Lineage
   from .bundle  import Bundle
+  from .orbit   import Orbit
 
 class Diagram:
   """
@@ -21,6 +22,7 @@ class Diagram:
     self.resolution  = resolution
     self._lineages: list["Lineage"] = []
     self._bundles:  list["Bundle"]  = []
+    self._orbits:   list["Orbit"]   = []
 
   def add_lineage(self, lineage:"Lineage"):
     """Register a lineage to the diagram."""
@@ -29,6 +31,10 @@ class Diagram:
   def add_bundle(self, bundle:"Bundle"):
     """Register a bundle to the diagram."""
     self._bundles.append(bundle)
+
+  def add_orbit(self, orbit:"Orbit"):
+    """Register an orbit to the diagram."""
+    self._orbits.append(orbit)
 
   def generate(self, filepath:str="diagram.svg"):
     """Generate the diagram to an SVG file."""
@@ -41,9 +47,75 @@ class Diagram:
 
     # Compile all lineages: compute segments, fetch from bundles when needed
     print("Step 2: Compiling lineage segments...")
+
+    # Topological Sort for Dependencies
+    # Dependencies:
+    # - Satellite depends on Orbit
+    # - Orbit depends on Main Lineage
+    # - Therefore: Satellite depends on Main Lineage
+
+    # Build adjacency list: lineage -> list of dependencies (lineages that must be compiled BEFORE this one)
+    dependencies = {lineage: set() for lineage in self._lineages}
+
+    # 1. Check Orbits
+    for orbit in self._orbits:
+        # Orbit depends on Main Lineage (implicitly, for solving)
+        # Satellites depend on Orbit (and thus Main Lineage)
+        for membership in orbit.memberships:
+            satellite = membership.lineage
+            if satellite in dependencies:
+                dependencies[satellite].add(orbit.main_lineage)
+
+    # 2. Perform Topological Sort
+    sorted_lineages = []
+    visited = set()
+    temp_mark = set()
+
+    def visit(node):
+        if node in temp_mark:
+            print(f"WARNING: Cyclic dependency detected involving {node}")
+            return
+        if node not in visited:
+            temp_mark.add(node)
+            for dependency in dependencies.get(node, []):
+                visit(dependency)
+            temp_mark.remove(node)
+            visited.add(node)
+            sorted_lineages.append(node)
+
     for lineage in self._lineages:
-      lineage.compile_segments()
-      svg_lines.append(lineage.draw())
+        if lineage not in visited:
+            visit(lineage)
+
+    # Compile in sorted order
+    # We also need to solve Orbits.
+    # We can solve an Orbit as soon as its Main Lineage is compiled.
+    # Or simply solve all Orbits that are ready?
+    # Easier: When compiling a lineage, check if it is a main lineage for any orbit, and solve those orbits?
+    # Or: Just iterate sorted lineages. After compiling L, solve any Orbit where L is main.
+
+    # Map main_lineage -> list of orbits
+    orbits_by_main = {}
+    for orbit in self._orbits:
+        if orbit.main_lineage not in orbits_by_main:
+            orbits_by_main[orbit.main_lineage] = []
+        orbits_by_main[orbit.main_lineage].append(orbit)
+
+    for lineage in sorted_lineages:
+        lineage.compile_segments()
+
+        # If this lineage is a main body for orbits, solve them now
+        if lineage in orbits_by_main:
+            for orbit in orbits_by_main[lineage]:
+                orbit.solve_geometry()
+
+    # Draw (in original order to preserve z-index preference?)
+    # Or sorted order?
+    # Usually dependencies imply z-order (satellite on top of body).
+    # If sorted: Body comes first, then Satellite.
+    # Drawing Body then Satellite puts Satellite ON TOP. This is correct.
+    for lineage in sorted_lineages:
+        svg_lines.append(lineage.draw())
 
     # Write SVG
     print("Step 3: Rendering...")

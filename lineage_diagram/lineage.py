@@ -1,14 +1,15 @@
 from typing import TYPE_CHECKING, Optional
 
-from .paths    import ScalablePath, ShiftEvent, ScaleEvent, MembershipEvent, MembershipEventType
+from .paths    import ScalablePath, ShiftablePath, ShiftEvent, ScaleEvent, MembershipEvent, MembershipEventType
 from .segments import IndependentSegment, DependentSegment
-from .utils      import smootherstep
+from .utils      import smootherstep, find_t_at_x
 
 if TYPE_CHECKING:
   from .diagram import Diagram
   from .bundle  import Bundle
+  from .orbit   import Orbit
 
-class Lineage(ScalablePath):
+class Lineage(ScalablePath, ShiftablePath):
   """
   Represents a single lineage in the diagram.
   A lineage is a path that can change width and position over time.
@@ -717,7 +718,7 @@ class Lineage(ScalablePath):
     """Scale lineage to new W width over X range."""
     self._scale_events.append(ScaleEvent(from_x, to_x, to_w))
 
-  def join(self, from_x:float, to_x:float, to_assembly:"Bundle", index:int=-1):
+  def join(self, from_x:float, to_x:float, to_assembly:"Bundle | Orbit", index:int=-1):
     """Join assembly over a transition X range."""
     self.membership_events.append(MembershipEvent(from_x, to_x, MembershipEventType.JOIN, assembly=to_assembly))
     # Inform the assembly of the new member.
@@ -734,7 +735,7 @@ class Lineage(ScalablePath):
       self,
       from_x:          float,
       to_x:            float,
-      from_assembly:  "Bundle",
+      from_assembly:  "Bundle | Orbit",
       to_y:            float,
       target_lineage: "Lineage" = None,
       offset_y:        float    = 0.0
@@ -779,6 +780,48 @@ class Lineage(ScalablePath):
     # But typically independent lineages have static Y or shifts we can calculate?
     # For now, return None if not in bundle, implying we fall back to static definition
     return None
+
+  def get_geometry_at(self, x: float) -> tuple[complex, complex]:
+    """
+    Get the upper and lower points of the lineage at position X.
+    This is used by Orbits to attach satellites to this lineage.
+    """
+    # If we have computed segments, use them
+    # If we have computed segments, use them
+    if self._computed_segments:
+        for segment in self._computed_segments:
+            if segment.start_x <= x <= segment.end_x:
+                # If it's a DependentSegment, delegate to the assembly (Bundle or Orbit)
+                if hasattr(segment, 'bundle'):
+                    # Note: segment.bundle can be a Bundle or an Orbit
+                    # We access the protected method _get_member_geometry_at which both should implement
+                    return segment.bundle._get_member_geometry_at(x, self)
+                else:
+                    # IndependentSegment: calculate from baseline path
+                    baseline_path = self.get_baseline_path()
+                    t = find_t_at_x(baseline_path, x)
+                    point = baseline_path.point(t)
+                    normal = baseline_path.normal(t)
+                    width = self.get_width_at(x)
+
+                    upper = point + normal * (width / 2)
+                    lower = point - normal * (width / 2)
+                    return upper, lower
+
+    # If no segments (not compiled yet) or out of range
+    # Fallback to calculating from events (Independent behavior)
+    baseline_path = self.get_baseline_path()
+    # Check if x is within range?
+    # If x is beyond end, width is 0.
+
+    t = find_t_at_x(baseline_path, x)
+    point = baseline_path.point(t)
+    normal = baseline_path.normal(t)
+    width = self.get_width_at(x)
+
+    upper = point + normal * (width / 2)
+    lower = point - normal * (width / 2)
+    return upper, lower
 
   def compile_segments(self):
     """Converts events into geometry segments."""

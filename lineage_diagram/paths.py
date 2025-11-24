@@ -8,6 +8,7 @@ from .utils      import smootherstep
 
 if TYPE_CHECKING:
   from .bundle import Bundle
+  from .orbit  import Orbit
 
 class MembershipEventType(Enum):
   JOIN  = 0
@@ -18,7 +19,7 @@ class MembershipEvent:
   from_x:         float
   to_x:           float
   type:           MembershipEventType
-  assembly:       Optional['Bundle'] = None
+  assembly:       Optional['Bundle | Orbit'] = None
   target_y:       Optional[float]    = None # For leave events
   # Optional dynamic target: leave to this lineage's position + offset
   target_lineage: Optional['Any'] = None
