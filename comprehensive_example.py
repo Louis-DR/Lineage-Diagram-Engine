@@ -97,7 +97,8 @@ line_trunk = Lineage(
     color   = color_green,
     start_x = 0,
     start_y = 250,
-    start_w = 40
+    start_w = 40,
+    z       = 1,
 )
 line_trunk.shift_to(from_x= 600, to_x= 700, to_y=300)
 line_trunk.shift_to(from_x=1200, to_x=1500, to_y=250)
@@ -539,7 +540,14 @@ merged_line = Lineage.create_from_merge(
 # 8. Continuing Splits
 # -----------------------------------------------------------------------------
 
-source_line = Lineage(diagram, color_white, 0, 800, 40)
+source_line = Lineage(
+    diagram = diagram,
+    color   = color_white,
+    start_x = 0,
+    start_y = 800,
+    start_w = 40,
+    z       = 1,
+)
 
 # Split 1
 split_line_1 = Lineage.create_split_from(

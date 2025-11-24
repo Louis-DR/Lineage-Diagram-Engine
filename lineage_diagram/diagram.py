@@ -67,8 +67,8 @@ class Diagram:
                 dependencies[satellite].add(orbit.main_lineage)
 
     # 2. Perform Topological Sort
-    sorted_lineages = []
-    visited = set()
+    solve_order_lineages = []
+    visited   = set()
     temp_mark = set()
 
     def visit(node):
@@ -81,7 +81,7 @@ class Diagram:
                 visit(dependency)
             temp_mark.remove(node)
             visited.add(node)
-            sorted_lineages.append(node)
+            solve_order_lineages.append(node)
 
     for lineage in self._lineages:
         if lineage not in visited:
@@ -101,7 +101,7 @@ class Diagram:
             orbits_by_main[orbit.main_lineage] = []
         orbits_by_main[orbit.main_lineage].append(orbit)
 
-    for lineage in sorted_lineages:
+    for lineage in solve_order_lineages:
         lineage.compile_segments()
 
         # If this lineage is a main body for orbits, solve them now
@@ -109,12 +109,12 @@ class Diagram:
             for orbit in orbits_by_main[lineage]:
                 orbit.solve_geometry()
 
-    # Draw (in original order to preserve z-index preference?)
-    # Or sorted order?
-    # Usually dependencies imply z-order (satellite on top of body).
-    # If sorted: Body comes first, then Satellite.
-    # Drawing Body then Satellite puts Satellite ON TOP. This is correct.
-    for lineage in sorted_lineages:
+    # Draw
+    # Sort by Z (ascending) to ensure correct layering.
+    # Stable sort preserves topological/creation order for equal Z.
+    draw_order_lineages = sorted(solve_order_lineages, key=lambda lineage: lineage.z)
+
+    for lineage in draw_order_lineages:
         svg_lines.append(lineage.draw())
 
     # Write SVG

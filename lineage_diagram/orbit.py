@@ -80,6 +80,7 @@ class Orbit:
             return 1.0 - smootherstep(ratio)
         # Stable
         return 1.0
+
     def _calculate_layout(self, memberships:list[OrbitMembership], x:float) -> dict["Lineage",float]:
         """
         Calculate the offset from the main lineage center for each member at X.

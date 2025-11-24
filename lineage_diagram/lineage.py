@@ -23,6 +23,7 @@ class Lineage(ScalablePath, ShiftablePath):
       start_x:  float,
       start_y:  float,
       start_w:  float,
+      z:        float = 0.0,
     ):
     diagram.add_lineage(self)
     self.diagram = diagram
@@ -30,6 +31,7 @@ class Lineage(ScalablePath, ShiftablePath):
     self.start_x = start_x
     self.start_y = start_y
     self.start_w = start_w
+    self.z       = z
 
     # Events lists
     self.membership_events: list[MembershipEvent] = []
@@ -54,10 +56,11 @@ class Lineage(ScalablePath, ShiftablePath):
       in_bundle:       "Bundle",
       index:            int   = -1,
       fade_in_duration: float = 0.0,
+      z:                float = 0.0,
     ) -> "Lineage":
     """Create a lineage that starts inside a bundle."""
     # Create the instance
-    instance = cls(diagram, color, start_x, 0, start_w)
+    instance = cls(diagram, color, start_x, 0, start_w, z=z)
 
     # Register membership taking into accound fade-in duration
     start_membership_x = start_x - fade_in_duration
@@ -83,7 +86,8 @@ class Lineage(ScalablePath, ShiftablePath):
       start_w:      float,
       parents:      list["Lineage"],
       in_bundle:   "Bundle",
-      index:        int = -1,
+      index:        int   = -1,
+      z:            float = 0.0,
     ) -> "Lineage":
     """Create a lineage inside a bundle resulting from the merge of parents."""
     return cls.create_from_merge(
@@ -96,6 +100,7 @@ class Lineage(ScalablePath, ShiftablePath):
       parents      = parents,
       in_bundle    = in_bundle,
       index        = index,
+      z            = z,
     )
 
   @staticmethod
@@ -228,17 +233,18 @@ class Lineage(ScalablePath, ShiftablePath):
       parents:      list["Lineage"],
       in_bundle:   "Bundle" = None,
       index:        int     = -1,
+      z:            float   = 0.0,
     ) -> "Lineage":
     """Create a lineage resulting from the merge of parents."""
     if in_bundle:
       fade_in_duration = start_x - merge_from_x
-      child            = cls.create_in_bundle(diagram, color, start_x, start_w, in_bundle, index, fade_in_duration)
+      child            = cls.create_in_bundle(diagram, color, start_x, start_w, in_bundle, index, fade_in_duration, z=z)
       # If in bundle, start_y is ignored/dynamic. We use 0 as base for relative calculations if needed,
       # but really we should rely on the child's dynamic position.
       # For the layout calculation below, we assume centered around 0 (relative) and will use target_lineage offset.
       layout_base_y = 0
     else:
-      child         = cls(diagram, color, start_x, start_y, start_w)
+      child         = cls(diagram, color, start_x, start_y, start_w, z=z)
       layout_base_y = start_y
 
     # Sort parents by Y position at merge_from_x
@@ -351,6 +357,7 @@ class Lineage(ScalablePath, ShiftablePath):
       - target_y: float (optional, for independent)
       - in_bundle: Bundle (optional)
       - index: int (optional, for bundle)
+      - z: float (optional, default 0.0)
     """
     # Sort children specs by target_y (or index if in bundle)
     # If target_y is not present (e.g. in bundle), we might use index or default to 0
@@ -394,7 +401,9 @@ class Lineage(ScalablePath, ShiftablePath):
       target_w  = spec['target_w']
       in_bundle = spec.get('in_bundle')
       index     = spec.get('index', -1)
+      index     = spec.get('index', -1)
       target_y  = spec.get('target_y', 0)
+      z         = spec.get('z', 0.0)
 
       # Create child
       # The child starts at start_x.
@@ -423,7 +432,7 @@ class Lineage(ScalablePath, ShiftablePath):
 
       # Create the child instance
       # Let's create it as independent first, then join/shift.
-      child = Lineage(self.diagram, color, start_x, child_start_y, start_w)
+      child = Lineage(self.diagram, color, start_x, child_start_y, start_w, z=z)
 
       # Transition width
       child.scale_to(start_x, split_to_x, target_w)
@@ -505,6 +514,7 @@ class Lineage(ScalablePath, ShiftablePath):
       parent_target_y:   float   = 0.0,
       parent_in_bundle: "Bundle" = None,
       parent_index:      int     = -1,
+      new_z:             float   = 0.0,
     ) -> "Lineage":
     """
     Split a new lineage from parent, while parent continues.
@@ -526,7 +536,10 @@ class Lineage(ScalablePath, ShiftablePath):
         'target_y':  new_target_y,
         'in_bundle': new_in_bundle,
         'index':     new_index,
-        'color':     new_color
+        'in_bundle': new_in_bundle,
+        'index':     new_index,
+        'color':     new_color,
+        'z':         new_z
     }
 
     children_specs = [parent_spec, new_spec]
@@ -609,8 +622,9 @@ class Lineage(ScalablePath, ShiftablePath):
             # New lineage starts at Packed State at start_x.
             new_start_w = start_w
             new_start_y = parent_y_at_start + start_center_rel
+            z           = spec.get('z', 0.0)
 
-            new_lineage = cls(parent.diagram, spec['color'], start_x, new_start_y, new_start_w)
+            new_lineage = cls(parent.diagram, spec['color'], start_x, new_start_y, new_start_w, z=z)
             new_lineage.scale_to(start_x, split_to_x, spec['target_w'])
 
             if spec['in_bundle']:
