@@ -15,7 +15,7 @@ class BundleMembership:
   """
   Represents the membership of a lineage in a bundle.
   """
-  lineage:           "Lineage"
+  lineage:          "Lineage"
   start_x:           float
   end_x:             float
   fade_in_duration:  float = 0.0
@@ -31,9 +31,9 @@ class Bundle(ShiftablePath):
   def __init__(
       self,
       diagram: "Diagram",
-      start_x: float,
-      start_y: float,
-      margin:  float,
+      start_x:  float,
+      start_y:  float,
+      margin:   float,
     ):
     diagram.add_bundle(self)
     self.diagram = diagram
@@ -59,7 +59,7 @@ class Bundle(ShiftablePath):
 
   def add_member(
       self,
-      lineage:          "Lineage",
+      lineage:         "Lineage",
       start_x:          float,
       end_x:            float,
       fade_in_duration: float = 0.0,
@@ -151,7 +151,7 @@ class Bundle(ShiftablePath):
       # Edge correction: The "average" formula assumes neighbors exist on both sides
       # and are fully present (factor 1.0). We must remove the margin allocated to
       # the empty space at the start and end.
-      start_excess = 0.5 * self.margin * (1.0 - factors[0])
+      start_excess = 0.5 * self.margin * (1.0 - factors[ 0])
       end_excess   = 0.5 * self.margin * (1.0 - factors[-1])
 
       # Apply start correction (bottom to top)
@@ -179,7 +179,7 @@ class Bundle(ShiftablePath):
     baseline_path = self.get_baseline_path()
 
     # Initialize empty point lists for all members
-    self._compiled_member_points = {membership.lineage: ([], []) for membership in self._memberships}
+    self._compiled_member_points = {membership.lineage: ([],[]) for membership in self._memberships}
 
     # Work step by step at the configured resolution
     for t in np.linspace(0, 1, self.diagram.resolution):
@@ -217,7 +217,7 @@ class Bundle(ShiftablePath):
         # Update bundle offset
         current_offset += member_width + member_gap
 
-  def _get_member_geometry_at(self, x:float, lineage:"Lineage") -> tuple[complex, complex]:
+  def _get_member_geometry_at(self, x:float, lineage:"Lineage") -> tuple[complex,complex]:
     """Calculate the upper and lower points of a member at a specific X."""
     baseline_path  = self.get_baseline_path()
     t              = find_t_at_x(baseline_path, x)

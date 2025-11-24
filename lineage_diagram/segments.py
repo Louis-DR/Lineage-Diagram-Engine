@@ -11,7 +11,7 @@ if TYPE_CHECKING:
 
 class Segment:
   """Base class for compiled segments ready to draw."""
-  def __init__(self, diagram: "Diagram"):
+  def __init__(self, diagram:"Diagram"):
     self.diagram       = diagram
     self._upper_points = []
     self._lower_points = []
@@ -20,7 +20,7 @@ class IndependentSegment(Segment, ShiftablePath, ScalablePath):
   """Segment that calculates its own geometry based on compiled shifts."""
   def __init__(
       self,
-      diagram:      "Diagram",
+      diagram:     "Diagram",
       start_x:      float,
       start_y:      float,
       start_w:      float,
@@ -29,14 +29,14 @@ class IndependentSegment(Segment, ShiftablePath, ScalablePath):
       scale_events: list[ScaleEvent],
     ):
     super().__init__(diagram)
-    self.start_x      = start_x
-    self.start_y      = start_y
-    self.start_w      = start_w
-    self.end_x        = end_x
+    self.start_x       = start_x
+    self.start_y       = start_y
+    self.start_w       = start_w
+    self.end_x         = end_x
     self._shift_events = shift_events
     self._scale_events = scale_events
 
-  def compile(self) -> tuple[list[complex], list[complex]]:
+  def compile(self) -> tuple[list[complex],list[complex]]:
     """Compile the segment and return the lists of upper and lower points of the shape."""
     baseline_path = self.get_baseline_path()
 
@@ -99,8 +99,8 @@ class DependentSegment(Segment):
       diagram: "Diagram",
       bundle:  "Bundle",
       lineage: "Lineage",
-      start_x: float,
-      end_x:   float,
+      start_x:  float,
+      end_x:    float,
     ):
     super().__init__(diagram)
     self.bundle  = bundle

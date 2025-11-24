@@ -18,10 +18,10 @@ class Lineage(ScalablePath):
   def __init__(
       self,
       diagram: "Diagram",
-      color:   str,
-      start_x: float,
-      start_y: float,
-      start_w: float,
+      color:    str,
+      start_x:  float,
+      start_y:  float,
+      start_w:  float,
     ):
     diagram.add_lineage(self)
     self.diagram = diagram
@@ -32,8 +32,8 @@ class Lineage(ScalablePath):
 
     # Events lists
     self.membership_events: list[MembershipEvent] = []
-    self._shift_events:      list[ShiftEvent]      = []
-    self._scale_events:      list[ScaleEvent]      = []
+    self._shift_events:     list[ShiftEvent]      = []
+    self._scale_events:     list[ScaleEvent]      = []
 
     # Computed segments
     self._computed_segments = []
@@ -46,11 +46,11 @@ class Lineage(ScalablePath):
   @classmethod
   def create_in_bundle(
       cls,
-      diagram:          "Diagram",
+      diagram:         "Diagram",
       color:            str,
       start_x:          float,
       start_w:          float,
-      in_bundle:        "Bundle",
+      in_bundle:       "Bundle",
       index:            int   = -1,
       fade_in_duration: float = 0.0,
     ) -> "Lineage":
@@ -75,13 +75,13 @@ class Lineage(ScalablePath):
   @classmethod
   def create_in_bundle_from_merge(
       cls,
-      diagram:      "Diagram",
+      diagram:     "Diagram",
       color:        str,
       merge_from_x: float,
       start_x:      float,
       start_w:      float,
       parents:      list["Lineage"],
-      in_bundle:    "Bundle",
+      in_bundle:   "Bundle",
       index:        int = -1,
     ) -> "Lineage":
     """Create a lineage inside a bundle resulting from the merge of parents."""
@@ -163,7 +163,7 @@ class Lineage(ScalablePath):
       parent_w:               float,
       parent_center_y:        float,
       children_target_widths: list[float],
-    ) -> tuple[list[float], list[float]]:
+    ) -> tuple[list[float],list[float]]:
     """Calculate the start width and center Y for each child at the split point."""
     total_children_target_width = sum(children_target_widths)
 
@@ -218,15 +218,15 @@ class Lineage(ScalablePath):
   @classmethod
   def create_from_merge(
       cls,
-      diagram:      "Diagram",
+      diagram:     "Diagram",
       color:        str,
       merge_from_x: float,
       start_x:      float,
       start_y:      float,
       start_w:      float,
       parents:      list["Lineage"],
-      in_bundle:    "Bundle" = None,
-      index:        int = -1,
+      in_bundle:   "Bundle" = None,
+      index:        int     = -1,
     ) -> "Lineage":
     """Create a lineage resulting from the merge of parents."""
     if in_bundle:
@@ -493,17 +493,17 @@ class Lineage(ScalablePath):
   def create_split_from(
       cls,
       parent:           "Lineage",
-      start_x:          float,
-      split_to_x:       float,
-      new_color:        str,
-      new_target_w:     float,
-      new_target_y:     float = 0.0,
+      start_x:           float,
+      split_to_x:        float,
+      new_color:         str,
+      new_target_w:      float,
+      new_target_y:      float   = 0.0,
       new_in_bundle:    "Bundle" = None,
-      new_index:        int = -1,
-      parent_target_w:  float = 0.0,
-      parent_target_y:  float = 0.0,
+      new_index:         int     = -1,
+      parent_target_w:   float   = 0.0,
+      parent_target_y:   float   = 0.0,
       parent_in_bundle: "Bundle" = None,
-      parent_index:     int = -1,
+      parent_index:      int     = -1,
     ) -> "Lineage":
     """
     Split a new lineage from parent, while parent continues.
@@ -622,11 +622,10 @@ class Lineage(ScalablePath):
   def merge_into(
       self,
       target_lineage: "Lineage",
-      merge_from_x:   float,
-      end_x:          float,
-      target_w:       float,
-      target_y:       Optional[float] = None,
-      in_bundle:      "Bundle" = None, # Not used logic-wise for target? Or maybe?
+      merge_from_x:    float,
+      end_x:           float,
+      target_w:        float,
+      target_y:        Optional[float] = None,
     ):
     """
     Merge this lineage into target_lineage. target_lineage continues.
@@ -705,11 +704,11 @@ class Lineage(ScalablePath):
 
   def shift_to(
       self,
-      from_x:         float,
-      to_x:           float,
-      to_y:           float,
+      from_x:          float,
+      to_x:            float,
+      to_y:            float,
       target_lineage: "Lineage" = None,
-      offset_y:       float     = 0.0
+      offset_y:        float    = 0.0
     ):
     """Shift lineage to new Y position over X range."""
     self._shift_events.append(ShiftEvent(from_x, to_x, to_y, target_lineage, offset_y))
@@ -733,12 +732,12 @@ class Lineage(ScalablePath):
 
   def leave(
       self,
-      from_x:         float,
-      to_x:           float,
+      from_x:          float,
+      to_x:            float,
       from_assembly:  "Bundle",
-      to_y:           float,
+      to_y:            float,
       target_lineage: "Lineage" = None,
-      offset_y:       float     = 0.0
+      offset_y:        float    = 0.0
     ):
     """Leave assembly over a transition X range."""
     self.membership_events.append(MembershipEvent(
@@ -758,7 +757,7 @@ class Lineage(ScalablePath):
         membership.fade_out_duration = to_x - from_x
         break
 
-  def _resolve_target_y(self, target_lineage: "Lineage", at_x: float, offset_y: float) -> Optional[float]:
+  def _resolve_target_y(self, target_lineage:"Lineage", at_x:float, offset_y:float) -> Optional[float]:
     """Resolve the Y position of a target lineage at a specific X, handling bundle context."""
     # Check if target starts in a bundle (common merge case)
     target_bundle = None
@@ -814,7 +813,7 @@ class Lineage(ScalablePath):
       # Clamp to drawing_max_x for visual cutoff
       end_segment_x = min(end_segment_x, drawing_max_x)
 
-      # If lineage is independant
+      # If lineage is independent
       if not is_dependent:
         # Create independent segment from current_x to end_segment_x
         # Collect shifts that happen in this range
@@ -933,7 +932,7 @@ class Lineage(ScalablePath):
           self._computed_segments.append(segment)
           break
 
-  def _get_y_at(self, x: float) -> float:
+  def _get_y_at(self, x:float) -> float:
     """Resolve the Y position of the lineage at a specific X, handling shifts and bundles."""
     # 1. Check bundle membership
     parent_bundle = None

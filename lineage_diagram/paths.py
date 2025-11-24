@@ -15,20 +15,20 @@ class MembershipEventType(Enum):
 
 @dataclass
 class MembershipEvent:
-  from_x:   float
-  to_x:     float
-  type:     MembershipEventType
-  assembly: Optional['Bundle'] = None
-  target_y: Optional[float]    = None # For leave events
+  from_x:         float
+  to_x:           float
+  type:           MembershipEventType
+  assembly:       Optional['Bundle'] = None
+  target_y:       Optional[float]    = None # For leave events
   # Optional dynamic target: leave to this lineage's position + offset
   target_lineage: Optional['Any'] = None
   offset_y:       float           = 0.0
 
 @dataclass
 class ShiftEvent:
-  from_x: float
-  to_x:   float
-  to_y:   Optional[float] = None
+  from_x:         float
+  to_x:           float
+  to_y:           Optional[float] = None
   # Optional dynamic target: shift to this lineage's position + offset
   target_lineage: Optional['Any'] = None
   offset_y:       float           = 0.0
@@ -101,7 +101,7 @@ class ScalablePath(PathBase):
   start_w:       float
   _scale_events: list[ScaleEvent]
 
-  def get_width_at(self, x: float) -> float:
+  def get_width_at(self, x:float) -> float:
     """Get the width of the object at X position."""
     # If the object has ended, its width is 0
     if self.end_x is not None and x > self.end_x:
