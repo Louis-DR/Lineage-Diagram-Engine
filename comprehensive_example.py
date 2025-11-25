@@ -3,7 +3,14 @@ from lineage_diagram.lineage import Lineage
 from lineage_diagram.bundle  import Bundle
 from lineage_diagram.orbit   import Orbit
 
-diagram = Diagram(view_width=2000, view_height=1500, resolution=1000)
+diagram = Diagram(
+    view_width  = 2000,
+    view_height = 1500,
+    resolution  = 1000,
+    auto_color_transition     = True,
+    lineage_stroke_width      = 0.5,
+    color_transition_duration = 0.2,
+)
 
 color_blue        = 'steelblue'
 color_red         = 'indianred'
@@ -1288,6 +1295,7 @@ line_color = Lineage(
     start_y = 1200,
     start_w = 20
 )
+
 line_color.shade(from_x=100, to_x=200,  color=color_blue)
 line_color.shade(from_x=300, to_x=400,  color=color_red)
 line_color.shade(from_x=500, to_x=600,  color=color_green)

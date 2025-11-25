@@ -16,10 +16,16 @@ class Diagram:
       view_width:  float,
       view_height: float,
       resolution:  int = 1000,
+      auto_color_transition:     bool  = True,
+      lineage_stroke_width:      float = 0.0,
+      color_transition_duration: float = 1.0,
     ):
     self.view_width  = view_width
     self.view_height = view_height
     self.resolution  = resolution
+    self.auto_color_transition     = auto_color_transition
+    self.lineage_stroke_width      = lineage_stroke_width
+    self.color_transition_duration = color_transition_duration
     self._lineages: list["Lineage"] = []
     self._bundles:  list["Bundle"]  = []
     self._orbits:   list["Orbit"]   = []

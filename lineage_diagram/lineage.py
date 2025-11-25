@@ -341,6 +341,12 @@ class Lineage(ScalablePath, ShiftablePath):
           offset_y       = offset_y,
         )
       parent.scale_to(merge_from_x, start_x, parent_target_w)
+      if diagram.auto_color_transition:
+        # Merge: Align to end (start_x)
+        duration = start_x - merge_from_x
+        fade_duration = duration * diagram.color_transition_duration
+        shade_start = start_x - fade_duration
+        parent.shade(shade_start, start_x, color)
       parent.terminate_at(start_x)
     return child
 
@@ -433,7 +439,15 @@ class Lineage(ScalablePath, ShiftablePath):
 
       # Create the child instance
       # Let's create it as independent first, then join/shift.
-      child = Lineage(self.diagram, color, start_x, child_start_y, start_w, z=z)
+      # Start with parent color, then shade to target color IF auto_color_transition is True
+      initial_color = self.color if self.diagram.auto_color_transition else color
+      child = Lineage(self.diagram, initial_color, start_x, child_start_y, start_w, z=z)
+      if self.diagram.auto_color_transition:
+        # Split: Align to start (start_x)
+        duration = split_to_x - start_x
+        fade_duration = duration * self.diagram.color_transition_duration
+        shade_end = start_x + fade_duration
+        child.shade(start_x, shade_end, color)
 
       # Transition width
       child.scale_to(start_x, split_to_x, target_w)
@@ -625,7 +639,15 @@ class Lineage(ScalablePath, ShiftablePath):
             new_start_y = parent_y_at_start + start_center_rel
             z           = spec.get('z', 0.0)
 
-            new_lineage = cls(parent.diagram, spec['color'], start_x, new_start_y, new_start_w, z=z)
+            # Start with parent color, shade to new color IF auto_color_transition is True
+            initial_color = parent.color if parent.diagram.auto_color_transition else spec['color']
+            new_lineage = cls(parent.diagram, initial_color, start_x, new_start_y, new_start_w, z=z)
+            if parent.diagram.auto_color_transition:
+                # Split: Align to start (start_x)
+                duration = split_to_x - start_x
+                fade_duration = duration * parent.diagram.color_transition_duration
+                shade_end = start_x + fade_duration
+                new_lineage.shade(start_x, shade_end, spec['color'])
             new_lineage.scale_to(start_x, split_to_x, spec['target_w'])
 
             if spec['in_bundle']:
@@ -700,6 +722,12 @@ class Lineage(ScalablePath, ShiftablePath):
             # Merging Lineage (Ends)
             parent.scale_to(merge_from_x, end_x, target_w_at_merge)
             parent.shift_to(merge_from_x, end_x, center_at_merge)
+            if self.diagram.auto_color_transition:
+                # Merge: Align to end (end_x)
+                duration = end_x - merge_from_x
+                fade_duration = duration * self.diagram.color_transition_duration
+                shade_start = end_x - fade_duration
+                parent.shade(shade_start, end_x, target_lineage.color)
             parent.terminate_at(end_x)
         else:
             # Parent Lineage (Target)
@@ -1186,5 +1214,9 @@ class Lineage(ScalablePath, ShiftablePath):
     else:
         fill_attr = self.color
 
-    shape_path_svg += f'<path fill="{fill_attr}" stroke="none" d="{shape_path_d}"/>'
+    stroke = 'stroke="none"'
+    if self.diagram.lineage_stroke_width != 0:
+      stroke = f'stroke="{fill_attr}" stroke-width="{self.diagram.lineage_stroke_width}"'
+
+    shape_path_svg += f'<path fill="{fill_attr}" {stroke} d="{shape_path_d}"/>'
     return shape_path_svg
