@@ -1,6 +1,6 @@
 from typing import TYPE_CHECKING, Optional
 
-from .paths    import ScalablePath, ShiftablePath, ShiftEvent, ScaleEvent, MembershipEvent, MembershipEventType
+from .paths    import ScalablePath, ShiftablePath, ShiftEvent, ScaleEvent, MembershipEvent, MembershipEventType, ShadeEvent
 from .segments import IndependentSegment, DependentSegment
 from .utils      import smootherstep, find_t_at_x
 
@@ -37,6 +37,7 @@ class Lineage(ScalablePath, ShiftablePath):
     self.membership_events: list[MembershipEvent] = []
     self._shift_events:     list[ShiftEvent]      = []
     self._scale_events:     list[ScaleEvent]      = []
+    self._shade_events:     list[ShadeEvent]      = []
 
     # Computed segments
     self._computed_segments = []
@@ -732,6 +733,10 @@ class Lineage(ScalablePath, ShiftablePath):
     """Scale lineage to new W width over X range."""
     self._scale_events.append(ScaleEvent(from_x, to_x, to_w))
 
+  def shade(self, from_x:float, to_x:float, color:str):
+    """Transition lineage color to new color over X range."""
+    self._shade_events.append(ShadeEvent(from_x, to_x, color))
+
   def join(self, from_x:float, to_x:float, to_assembly:"Bundle | Orbit", index:int=-1):
     """Join assembly over a transition X range."""
     self.membership_events.append(MembershipEvent(from_x, to_x, MembershipEventType.JOIN, assembly=to_assembly))
@@ -1133,5 +1138,53 @@ class Lineage(ScalablePath, ShiftablePath):
       shape_path_d += f" L {lower_point.real} {lower_point.imag}"
     shape_path_d += " Z"
 
-    shape_path_svg = f'<path fill="{self.color}" stroke="none" d="{shape_path_d}"/>'
+    shape_path_svg = ""
+
+    # Handle Gradient
+    if self._shade_events:
+        gradient_id = f"gradient-{id(self)}"
+
+        # Sort events
+        self._shade_events.sort(key=lambda e: e.from_x)
+
+        stops = []
+        # Initial color stop
+        stops.append(f'<stop offset="0%" stop-color="{self.color}"/>')
+
+        current_color = self.color
+
+        for event in self._shade_events:
+            # Calculate offsets as percentage of view_width
+            start_offset = (event.from_x / self.diagram.view_width) * 100
+            end_offset   = (event.to_x / self.diagram.view_width) * 100
+
+            # Clamp offsets
+            start_offset = max(0, min(100, start_offset))
+            end_offset   = max(0, min(100, end_offset))
+
+            # Add stops
+            # Before transition: maintain current color until start
+            stops.append(f'<stop offset="{start_offset}%" stop-color="{current_color}"/>')
+
+            # After transition: new color
+            stops.append(f'<stop offset="{end_offset}%" stop-color="{event.color}"/>')
+
+            current_color = event.color
+
+        # Final stop to maintain last color until end
+        stops.append(f'<stop offset="100%" stop-color="{current_color}"/>')
+
+        gradient_def = f'''
+        <defs>
+            <linearGradient id="{gradient_id}" gradientUnits="userSpaceOnUse" x1="0" x2="{self.diagram.view_width}" y1="0" y2="0">
+                {"".join(stops)}
+            </linearGradient>
+        </defs>
+        '''
+        shape_path_svg += gradient_def
+        fill_attr = f"url(#{gradient_id})"
+    else:
+        fill_attr = self.color
+
+    shape_path_svg += f'<path fill="{fill_attr}" stroke="none" d="{shape_path_d}"/>'
     return shape_path_svg

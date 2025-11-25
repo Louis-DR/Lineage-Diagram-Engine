@@ -3,7 +3,7 @@ from lineage_diagram.lineage import Lineage
 from lineage_diagram.bundle  import Bundle
 from lineage_diagram.orbit   import Orbit
 
-diagram = Diagram(view_width=2000, view_height=1250, resolution=1000)
+diagram = Diagram(view_width=2000, view_height=1500, resolution=1000)
 
 color_blue        = 'steelblue'
 color_red         = 'indianred'
@@ -1272,6 +1272,38 @@ satellite_line_4.join(from_x=1500, to_x=1550, to_assembly=orbit, index=+1)
 
 satellite_line_2.join(from_x=1550, to_x=1600, to_assembly=orbit, index=-1)
 satellite_line_3.join(from_x=1550, to_x=1600, to_assembly=orbit, index=+1)
+
+
+
+
+
+# -----------------------------------------------------------------------------
+# 11. Color shading
+# -----------------------------------------------------------------------------
+
+line_color = Lineage(
+    diagram = diagram,
+    color   = color_white,
+    start_x = 0,
+    start_y = 1200,
+    start_w = 20
+)
+line_color.shade(from_x=100, to_x=200,  color=color_blue)
+line_color.shade(from_x=300, to_x=400,  color=color_red)
+line_color.shade(from_x=500, to_x=600,  color=color_green)
+line_color.shade(from_x=700, to_x=800,  color=color_yellow)
+line_color.shade(from_x=900, to_x=1000, color=color_white)
+
+line_color.shift_to(from_x=1100, to_x=1200, to_y=1300)
+line_color.shade(   from_x=1125, to_x=1175, color=color_blue)
+line_color.shift_to(from_x=1300, to_x=1400, to_y=1200)
+line_color.shade(   from_x=1325, to_x=1375, color=color_red)
+line_color.shift_to(from_x=1500, to_x=1600, to_y=1300)
+line_color.shade(   from_x=1525, to_x=1575, color=color_green)
+line_color.shift_to(from_x=1700, to_x=1800, to_y=1200)
+line_color.shade(   from_x=1725, to_x=1775, color=color_yellow)
+line_color.shift_to(from_x=1900, to_x=1950, to_y=1250)
+line_color.shade(   from_x=1900, to_x=1950, color=color_white)
 
 
 

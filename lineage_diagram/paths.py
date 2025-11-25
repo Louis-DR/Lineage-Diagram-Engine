@@ -40,6 +40,12 @@ class ScaleEvent:
   to_x:   float
   to_w:   float
 
+@dataclass
+class ShadeEvent:
+  from_x: float
+  to_x:   float
+  color:  str
+
 class PathBase:
   """Base class for paths with a defined lifecycle (start/end)."""
   start_x: float
