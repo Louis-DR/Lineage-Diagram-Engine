@@ -783,7 +783,7 @@ class Lineage(ScalablePath, ShiftablePath):
       from_x:          float,
       to_x:            float,
       from_assembly:  "Bundle | Orbit",
-      to_y:            float,
+      to_y:            Optional[float] = None,
       target_lineage: "Lineage" = None,
       offset_y:        float    = 0.0
     ):
@@ -804,6 +804,37 @@ class Lineage(ScalablePath, ShiftablePath):
         membership.end_x             = to_x
         membership.fade_out_duration = to_x - from_x
         break
+
+  def reorder(
+      self,
+      from_x:       float,
+      to_x:         float,
+      in_assembly: "Bundle | Orbit",
+      new_index:    int,
+    ):
+    """
+    Reorder the lineage within a bundle/orbit over a transition.
+    """
+    # Leave current assembly (maintain Y relative to it)
+    self.leave(from_x, to_x, in_assembly, to_y=None)
+    # Join same assembly at new index
+    self.join(from_x, to_x, in_assembly, index=new_index)
+
+  def transfer(
+      self,
+      from_x:         float,
+      to_x:           float,
+      from_assembly: "Bundle | Orbit",
+      to_assembly:   "Bundle | Orbit",
+      index:          int,
+    ):
+    """
+    Transfer the lineage from a bundle/orbit to another over a transition.
+    """
+    # Leave current assembly (maintain Y relative to it)
+    self.leave(from_x, to_x, from_assembly, to_y=None)
+    # Join new assembly at index
+    self.join(from_x, to_x, to_assembly, index=index)
 
   def _resolve_target_y(self, target_lineage:"Lineage", at_x:float, offset_y:float) -> Optional[float]:
     """Resolve the Y position of a target lineage at a specific X, handling bundle context."""
@@ -969,47 +1000,98 @@ class Lineage(ScalablePath, ShiftablePath):
       else:
         # Dependent lineage (inside a bundle)
         if next_event and next_event.type == MembershipEventType.LEAVE:
-          # Segment from current_x to leave event start
-          segment = DependentSegment(
-            diagram = self.diagram,
-            bundle  = current_bundle,
-            lineage = self,
-            start_x = current_x,
-            end_x   = min(next_event.from_x, drawing_max_x),
-          )
-          self._computed_segments.append(segment)
-          # Get the center point of the lineage inside the bundle when it leaves
-          center_in_bundle = current_bundle.get_center_point_of_member_at(next_event.from_x + 1e-3, self)
-          # Create a new independent segment that starts at the bundle position and shifts to the target Y
-          # Resolve dynamic target if needed
-          resolved_target_y = next_event.target_y
-          if next_event.target_lineage:
-             resolved_y = self._resolve_target_y(next_event.target_lineage, next_event.to_x, next_event.offset_y)
-             if resolved_y is not None:
-               resolved_target_y = resolved_y
+          # Check for Reorder (Leave + Join)
+          next_next_event = self.membership_events[event_index+1] if event_index + 1 < len(self.membership_events) else None
 
-          transition_shift = ShiftEvent(
-            from_x = next_event.from_x,
-            to_x   = next_event.to_x,
-            to_y   = resolved_target_y if resolved_target_y is not None else 0.0,
-          )
-          # This segment starts at the start of the transition
-          leave_seg = IndependentSegment(
-            diagram      = self.diagram,
-            start_x      = next_event.from_x,
-            start_y      = center_in_bundle.imag,
-            start_w      = self.start_w,
-            end_x        =min(next_event.to_x, drawing_max_x),
-            shift_events = [transition_shift],
-            scale_events = self._scale_events,
-          )
-          self._computed_segments.append(leave_seg)
-          # Update state
-          current_x      = next_event.to_x
-          current_y      = next_event.target_y
-          is_dependent   = False
-          current_bundle = None
-          event_index   += 1
+          if next_next_event and next_next_event.type == MembershipEventType.JOIN and abs(next_next_event.from_x - next_event.from_x) < 1e-5:
+             # REORDER / TRANSFER
+             # 1. Segment from current_x to transition start
+             segment = DependentSegment(
+               diagram = self.diagram,
+               bundle  = current_bundle,
+               lineage = self,
+               start_x = current_x,
+               end_x   = min(next_event.from_x, drawing_max_x),
+             )
+             self._computed_segments.append(segment)
+
+             # 2. Transition Segment
+             # Start point: Center in OLD bundle at from_x
+             start_center = current_bundle.get_center_point_of_member_at(next_event.from_x + 1e-3, self)
+
+             # End point: Center in NEW bundle at to_x
+             new_bundle = next_next_event.assembly
+             end_center = new_bundle.get_center_point_of_member_at(next_next_event.to_x, self)
+
+             transition_shift = ShiftEvent(
+               from_x = next_event.from_x,
+               to_x   = next_event.to_x,
+               to_y   = end_center.imag,
+             )
+
+             reorder_seg = IndependentSegment(
+               diagram      = self.diagram,
+               start_x      = next_event.from_x,
+               start_y      = start_center.imag,
+               start_w      = self.start_w,
+               end_x        = min(next_event.to_x, drawing_max_x),
+               shift_events = [transition_shift],
+               scale_events = self._scale_events,
+             )
+             self._computed_segments.append(reorder_seg)
+
+             # 3. Update State
+             current_x      = next_event.to_x
+             current_bundle = new_bundle
+             is_dependent   = True # We are back in a bundle
+             event_index   += 2    # Skip both LEAVE and JOIN
+
+          else:
+             # NORMAL LEAVE
+             # Segment from current_x to leave event start
+             segment = DependentSegment(
+               diagram = self.diagram,
+               bundle  = current_bundle,
+               lineage = self,
+               start_x = current_x,
+               end_x   = min(next_event.from_x, drawing_max_x),
+             )
+             self._computed_segments.append(segment)
+             # Get the center point of the lineage inside the bundle when it leaves
+             center_in_bundle = current_bundle.get_center_point_of_member_at(next_event.from_x + 1e-3, self)
+             # Create a new independent segment that starts at the bundle position and shifts to the target Y
+             # Resolve dynamic target if needed
+             resolved_target_y = next_event.target_y
+             if next_event.target_lineage:
+                resolved_y = self._resolve_target_y(next_event.target_lineage, next_event.to_x, next_event.offset_y)
+                if resolved_y is not None:
+                  resolved_target_y = resolved_y
+             elif resolved_target_y is None:
+                # If no target Y provided, default to the position when leaving (no shift)
+                resolved_target_y = center_in_bundle.imag
+
+             transition_shift = ShiftEvent(
+               from_x = next_event.from_x,
+               to_x   = next_event.to_x,
+               to_y   = resolved_target_y if resolved_target_y is not None else 0.0,
+             )
+             # This segment starts at the start of the transition
+             leave_seg = IndependentSegment(
+               diagram      = self.diagram,
+               start_x      = next_event.from_x,
+               start_y      = center_in_bundle.imag,
+               start_w      = self.start_w,
+               end_x        =min(next_event.to_x, drawing_max_x),
+               shift_events = [transition_shift],
+               scale_events = self._scale_events,
+             )
+             self._computed_segments.append(leave_seg)
+             # Update state
+             current_x      = next_event.to_x
+             current_y      = resolved_target_y
+             is_dependent   = False
+             current_bundle = None
+             event_index   += 1
         else:
           # Dependent until the end of the lineage
           segment = DependentSegment(
