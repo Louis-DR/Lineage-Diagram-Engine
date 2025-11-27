@@ -19,6 +19,8 @@ color_dark_green  = 'seagreen'
 color_yellow      = 'goldenrod'
 color_dark_yellow = 'darkgoldenrod'
 color_white       = 'white'
+color_gray        = 'gray'
+color_black       = 'black'
 
 
 
@@ -296,26 +298,26 @@ line_gen7.shift_to(from_x=1700, to_x=1800, to_y=400)
 
 simple_bundle = Bundle(diagram, start_x=0, start_y=500, margin=3)
 
-simple_bundle_line_1 = Lineage.create_in_bundle(
+simple_bundle_line_1 = Lineage.create_in_assembly(
     diagram   = diagram,
     color     = color_blue,
     start_x   = 0,
     start_w   = 10,
-    in_bundle = simple_bundle,
+    in_assembly = simple_bundle,
 )
-simple_bundle_line_2 = Lineage.create_in_bundle(
+simple_bundle_line_2 = Lineage.create_in_assembly(
     diagram   = diagram,
     color     = color_red,
     start_x   = 0,
     start_w   = 10,
-    in_bundle = simple_bundle,
+    in_assembly = simple_bundle,
 )
-simple_bundle_line_3 = Lineage.create_in_bundle(
+simple_bundle_line_3 = Lineage.create_in_assembly(
     diagram   = diagram,
     color     = color_green,
     start_x   = 0,
     start_w   = 10,
-    in_bundle = simple_bundle,
+    in_assembly = simple_bundle,
 )
 
 simple_bundle_line_1.scale_to(from_x=100, to_x=150, to_w=30)
@@ -385,33 +387,33 @@ simple_bundle_line_2.terminate_at(2000)
 
 host_bundle = Bundle(diagram, start_x=0, start_y=600, margin=3)
 
-host_bundle_line_1 = Lineage.create_in_bundle(
+host_bundle_line_1 = Lineage.create_in_assembly(
     diagram   = diagram,
     color     = color_blue,
     start_x   = 0,
     start_w   = 10,
-    in_bundle = host_bundle,
+    in_assembly = host_bundle,
 )
-host_bundle_line_2 = Lineage.create_in_bundle(
+host_bundle_line_2 = Lineage.create_in_assembly(
     diagram   = diagram,
     color     = color_red,
     start_x   = 0,
     start_w   = 10,
-    in_bundle = host_bundle,
+    in_assembly = host_bundle,
 )
-host_bundle_line_3 = Lineage.create_in_bundle(
+host_bundle_line_3 = Lineage.create_in_assembly(
     diagram   = diagram,
     color     = color_green,
     start_x   = 0,
     start_w   = 10,
-    in_bundle = host_bundle,
+    in_assembly = host_bundle,
 )
-host_bundle_line_4 = Lineage.create_in_bundle(
+host_bundle_line_4 = Lineage.create_in_assembly(
     diagram   = diagram,
     color     = color_yellow,
     start_x   = 0,
     start_w   = 10,
-    in_bundle = host_bundle,
+    in_assembly = host_bundle,
 )
 
 host_bundle_line_4.leave(from_x=100, to_x=150, from_assembly=host_bundle, to_y=550)
@@ -644,43 +646,43 @@ source_line.terminate_at(2000)
 
 host_bundle = Bundle(diagram, start_x=0, start_y=875, margin=3)
 
-host_bundle_line_1 = Lineage.create_in_bundle(
+host_bundle_line_1 = Lineage.create_in_assembly(
     diagram   = diagram,
     color     = color_blue,
     start_x   = 0,
     start_w   = 10,
-    in_bundle = host_bundle,
+    in_assembly = host_bundle,
 )
-host_bundle_line_2 = Lineage.create_in_bundle(
+host_bundle_line_2 = Lineage.create_in_assembly(
     diagram   = diagram,
     color     = color_red,
     start_x   = 0,
     start_w   = 10,
-    in_bundle = host_bundle,
+    in_assembly = host_bundle,
 )
-host_bundle_line_3 = Lineage.create_in_bundle(
+host_bundle_line_3 = Lineage.create_in_assembly(
     diagram   = diagram,
     color     = color_green,
     start_x   = 0,
     start_w   = 10,
-    in_bundle = host_bundle,
+    in_assembly = host_bundle,
 )
-host_bundle_line_4 = Lineage.create_in_bundle(
+host_bundle_line_4 = Lineage.create_in_assembly(
     diagram   = diagram,
     color     = color_yellow,
     start_x   = 0,
     start_w   = 10,
-    in_bundle = host_bundle,
+    in_assembly = host_bundle,
 )
 
-host_bundle_merged_line_1 = Lineage.create_in_bundle_from_merge(
+host_bundle_merged_line_1 = Lineage.create_in_assembly_from_merge(
     diagram      = diagram,
     color        = color_white,
     merge_from_x = 100,
     start_x      = 150,
     start_w      = 20,
     parents      = [host_bundle_line_1, host_bundle_line_2,],
-    in_bundle    = host_bundle,
+    in_assembly    = host_bundle,
     index        = 0,
 )
 host_bundle_line_2, host_bundle_line_1 = host_bundle_merged_line_1.split(
@@ -688,28 +690,28 @@ host_bundle_line_2, host_bundle_line_1 = host_bundle_merged_line_1.split(
     split_to_x = 250,
     children_specs = [
         {
-            "color":     color_red,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     0,
+            "color":       color_red,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       0,
         },
         {
-            "color":     color_blue,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     0,
+            "color":       color_blue,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       0,
         },
     ]
 )
 
-host_bundle_merged_line_2 = Lineage.create_in_bundle_from_merge(
+host_bundle_merged_line_2 = Lineage.create_in_assembly_from_merge(
     diagram      = diagram,
     color        = color_white,
     merge_from_x = 300,
     start_x      = 350,
     start_w      = 20,
     parents      = [host_bundle_line_2, host_bundle_line_3],
-    in_bundle    = host_bundle,
+    in_assembly    = host_bundle,
     index        = 2,
 )
 host_bundle_line_3, host_bundle_line_2 = host_bundle_merged_line_2.split(
@@ -717,28 +719,28 @@ host_bundle_line_3, host_bundle_line_2 = host_bundle_merged_line_2.split(
     split_to_x = 450,
     children_specs = [
         {
-            "color":     color_green,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     1,
+            "color":       color_green,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       1,
         },
         {
-            "color":     color_red,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     1,
+            "color":       color_red,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       1,
         },
     ]
 )
 
-host_bundle_merged_line_3 = Lineage.create_in_bundle_from_merge(
+host_bundle_merged_line_3 = Lineage.create_in_assembly_from_merge(
     diagram      = diagram,
     color        = color_white,
     merge_from_x = 500,
     start_x      = 550,
     start_w      = 20,
     parents      = [host_bundle_line_3, host_bundle_line_4,],
-    in_bundle    = host_bundle,
+    in_assembly    = host_bundle,
     index        = 2,
 )
 host_bundle_line_4, host_bundle_line_3 = host_bundle_merged_line_3.split(
@@ -746,28 +748,28 @@ host_bundle_line_4, host_bundle_line_3 = host_bundle_merged_line_3.split(
     split_to_x = 650,
     children_specs = [
         {
-            "color":     color_yellow,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     2,
+            "color":       color_yellow,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       2,
         },
         {
-            "color":     color_green,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     2,
+            "color":       color_green,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       2,
         },
     ]
 )
 
-host_bundle_merged_line_1 = Lineage.create_in_bundle_from_merge(
+host_bundle_merged_line_1 = Lineage.create_in_assembly_from_merge(
     diagram      = diagram,
     color        = color_white,
     merge_from_x = 700,
     start_x      = 750,
     start_w      = 5,
     parents      = [host_bundle_line_1, host_bundle_line_2,],
-    in_bundle    = host_bundle,
+    in_assembly    = host_bundle,
     index        = 0,
 )
 host_bundle_line_2, host_bundle_line_1 = host_bundle_merged_line_1.split(
@@ -775,28 +777,28 @@ host_bundle_line_2, host_bundle_line_1 = host_bundle_merged_line_1.split(
     split_to_x = 850,
     children_specs = [
         {
-            "color":     color_red,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     0,
+            "color":       color_red,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       0,
         },
         {
-            "color":     color_blue,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     0,
+            "color":       color_blue,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       0,
         },
     ]
 )
 
-host_bundle_merged_line_2 = Lineage.create_in_bundle_from_merge(
+host_bundle_merged_line_2 = Lineage.create_in_assembly_from_merge(
     diagram      = diagram,
     color        = color_white,
     merge_from_x = 900,
     start_x      = 950,
     start_w      = 5,
     parents      = [host_bundle_line_2, host_bundle_line_3],
-    in_bundle    = host_bundle,
+    in_assembly    = host_bundle,
     index        = 2,
 )
 host_bundle_line_3, host_bundle_line_2 = host_bundle_merged_line_2.split(
@@ -804,28 +806,28 @@ host_bundle_line_3, host_bundle_line_2 = host_bundle_merged_line_2.split(
     split_to_x = 1050,
     children_specs = [
         {
-            "color":     color_green,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     1,
+            "color":       color_green,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       1,
         },
         {
-            "color":     color_red,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     1,
+            "color":       color_red,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       1,
         },
     ]
 )
 
-host_bundle_merged_line_3 = Lineage.create_in_bundle_from_merge(
+host_bundle_merged_line_3 = Lineage.create_in_assembly_from_merge(
     diagram      = diagram,
     color        = color_white,
     merge_from_x = 1100,
     start_x      = 1150,
     start_w      = 5,
     parents      = [host_bundle_line_3, host_bundle_line_4,],
-    in_bundle    = host_bundle,
+    in_assembly    = host_bundle,
     index        = 2,
 )
 host_bundle_line_4, host_bundle_line_3 = host_bundle_merged_line_3.split(
@@ -833,28 +835,28 @@ host_bundle_line_4, host_bundle_line_3 = host_bundle_merged_line_3.split(
     split_to_x = 1250,
     children_specs = [
         {
-            "color":     color_yellow,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     2,
+            "color":       color_yellow,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       2,
         },
         {
-            "color":     color_green,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     2,
+            "color":       color_green,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       2,
         },
     ]
 )
 
-host_bundle_merged_line_1 = Lineage.create_in_bundle_from_merge(
+host_bundle_merged_line_1 = Lineage.create_in_assembly_from_merge(
     diagram      = diagram,
     color        = color_white,
     merge_from_x = 1300,
     start_x      = 1350,
     start_w      = 40,
     parents      = [host_bundle_line_1, host_bundle_line_2,],
-    in_bundle    = host_bundle,
+    in_assembly    = host_bundle,
     index        = 0,
 )
 host_bundle_line_2, host_bundle_line_1 = host_bundle_merged_line_1.split(
@@ -862,28 +864,28 @@ host_bundle_line_2, host_bundle_line_1 = host_bundle_merged_line_1.split(
     split_to_x = 1450,
     children_specs = [
         {
-            "color":     color_red,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     0,
+            "color":       color_red,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       0,
         },
         {
-            "color":     color_blue,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     0,
+            "color":       color_blue,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       0,
         },
     ]
 )
 
-host_bundle_merged_line_2 = Lineage.create_in_bundle_from_merge(
+host_bundle_merged_line_2 = Lineage.create_in_assembly_from_merge(
     diagram      = diagram,
     color        = color_white,
     merge_from_x = 1500,
     start_x      = 1550,
     start_w      = 40,
     parents      = [host_bundle_line_2, host_bundle_line_3],
-    in_bundle    = host_bundle,
+    in_assembly    = host_bundle,
     index        = 2,
 )
 host_bundle_line_3, host_bundle_line_2 = host_bundle_merged_line_2.split(
@@ -891,28 +893,28 @@ host_bundle_line_3, host_bundle_line_2 = host_bundle_merged_line_2.split(
     split_to_x = 1650,
     children_specs = [
         {
-            "color":     color_green,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     1,
+            "color":       color_green,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       1,
         },
         {
-            "color":     color_red,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     1,
+            "color":       color_red,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       1,
         },
     ]
 )
 
-host_bundle_merged_line_3 = Lineage.create_in_bundle_from_merge(
+host_bundle_merged_line_3 = Lineage.create_in_assembly_from_merge(
     diagram      = diagram,
     color        = color_white,
     merge_from_x = 1700,
     start_x      = 1750,
     start_w      = 40,
     parents      = [host_bundle_line_3, host_bundle_line_4,],
-    in_bundle    = host_bundle,
+    in_assembly    = host_bundle,
     index        = 2,
 )
 host_bundle_line_4, host_bundle_line_3 = host_bundle_merged_line_3.split(
@@ -920,16 +922,16 @@ host_bundle_line_4, host_bundle_line_3 = host_bundle_merged_line_3.split(
     split_to_x = 1850,
     children_specs = [
         {
-            "color":     color_yellow,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     2,
+            "color":       color_yellow,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       2,
         },
         {
-            "color":     color_green,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     2,
+            "color":       color_green,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       2,
         },
     ]
 )
@@ -944,33 +946,33 @@ host_bundle_line_4, host_bundle_line_3 = host_bundle_merged_line_3.split(
 
 host_bundle = Bundle(diagram, start_x=0, start_y=1000, margin=3)
 
-host_bundle_line_1 = Lineage.create_in_bundle(
+host_bundle_line_1 = Lineage.create_in_assembly(
     diagram   = diagram,
     color     = color_blue,
     start_x   = 0,
     start_w   = 10,
-    in_bundle = host_bundle,
+    in_assembly = host_bundle,
 )
-host_bundle_line_2 = Lineage.create_in_bundle(
+host_bundle_line_2 = Lineage.create_in_assembly(
     diagram   = diagram,
     color     = color_red,
     start_x   = 0,
     start_w   = 10,
-    in_bundle = host_bundle,
+    in_assembly = host_bundle,
 )
-host_bundle_line_3 = Lineage.create_in_bundle(
+host_bundle_line_3 = Lineage.create_in_assembly(
     diagram   = diagram,
     color     = color_green,
     start_x   = 0,
     start_w   = 10,
-    in_bundle = host_bundle,
+    in_assembly = host_bundle,
 )
-host_bundle_line_4 = Lineage.create_in_bundle(
+host_bundle_line_4 = Lineage.create_in_assembly(
     diagram   = diagram,
     color     = color_yellow,
     start_x   = 0,
     start_w   = 10,
-    in_bundle = host_bundle,
+    in_assembly = host_bundle,
 )
 
 merged_line_1 = Lineage.create_from_merge(
@@ -987,16 +989,16 @@ host_bundle_line_2, host_bundle_line_1 = merged_line_1.split(
     split_to_x = 250,
     children_specs = [
         {
-            "color":     color_red,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     0,
+            "color":       color_red,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       0,
         },
         {
-            "color":     color_blue,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     0,
+            "color":       color_blue,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       0,
         },
     ]
 )
@@ -1015,16 +1017,16 @@ host_bundle_line_3, host_bundle_line_2 = merged_line_2.split(
     split_to_x = 450,
     children_specs = [
         {
-            "color":     color_green,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     1,
+            "color":       color_green,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       1,
         },
         {
-            "color":     color_red,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     1,
+            "color":       color_red,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       1,
         },
     ]
 )
@@ -1043,16 +1045,16 @@ host_bundle_line_4, host_bundle_line_3 = merged_line_3.split(
     split_to_x = 650,
     children_specs = [
         {
-            "color":     color_yellow,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     2,
+            "color":       color_yellow,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       2,
         },
         {
-            "color":     color_green,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     2,
+            "color":       color_green,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       2,
         },
     ]
 )
@@ -1071,28 +1073,28 @@ host_bundle_line_4, host_bundle_line_1 = merged_line_4.split(
     split_to_x = 850,
     children_specs = [
         {
-            "color":     color_yellow,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     3,
+            "color":       color_yellow,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       3,
         },
         {
-            "color":     color_blue,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     0,
+            "color":       color_blue,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       0,
         },
     ]
 )
 
-merged_line_5 = Lineage.create_in_bundle_from_merge(
+merged_line_5 = Lineage.create_in_assembly_from_merge(
     diagram      = diagram,
     color        = color_white,
     merge_from_x = 900,
     start_x      = 950,
     start_w      = 20,
     parents      = [host_bundle_line_1, host_bundle_line_4],
-    in_bundle    = host_bundle,
+    in_assembly    = host_bundle,
     index        = 2,
 )
 host_bundle_line_4, host_bundle_line_1 = merged_line_5.split(
@@ -1100,16 +1102,16 @@ host_bundle_line_4, host_bundle_line_1 = merged_line_5.split(
     split_to_x = 1050,
     children_specs = [
         {
-            "color":     color_yellow,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     4,
+            "color":       color_yellow,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       4,
         },
         {
-            "color":     color_blue,
-            "target_w":  10,
-            "in_bundle": host_bundle,
-            "index":     0,
+            "color":       color_blue,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       0,
         },
     ]
 )
@@ -1156,16 +1158,15 @@ host_bundle_line_3, host_bundle_line_2 = merged_line_7.split(
     split_to_x = 1550,
     children_specs = [
         {
-            "color":     color_green,
-            "target_w":  10,
-            "target_y":  940,
+            "color":    color_green,
+            "target_w": 10,
+            "target_y": 940,
         },
         {
-            "color":     color_red,
-            "target_w":  10,
-            "target_y":  960,
-            "in_bundle": host_bundle,
-            "index":     1,
+            "color":       color_red,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       1,
         },
     ]
 )
@@ -1183,20 +1184,19 @@ host_bundle_line_3, host_bundle_line_2 = merged_line_8.split(
     split_to_x = 1750,
     children_specs = [
         {
-            "color":     color_green,
-            "target_w":  10,
-            "target_y":  940,
+            "color":    color_green,
+            "target_w": 10,
+            "target_y": 940,
         },
         {
-            "color":     color_red,
-            "target_w":  10,
-            "target_y":  960,
-            "in_bundle": host_bundle,
-            "index":     1,
+            "color":       color_red,
+            "target_w":    10,
+            "in_assembly": host_bundle,
+            "index":       1,
         },
     ]
 )
-host_bundle_line_3.join(from_x=1800, to_x=1850, to_assembly=host_bundle, index=2)
+host_bundle_line_2.join(from_x=1800, to_x=1850, to_assembly=host_bundle, index=2)
 
 
 
@@ -1280,6 +1280,66 @@ satellite_line_4.join(from_x=1500, to_x=1550, to_assembly=orbit, index=+1)
 satellite_line_2.join(from_x=1550, to_x=1600, to_assembly=orbit, index=-1)
 satellite_line_3.join(from_x=1550, to_x=1600, to_assembly=orbit, index=+1)
 
+satellite_merged_line_1 = Lineage.create_in_assembly_from_merge(
+    diagram      = diagram,
+    color        = color_gray,
+    merge_from_x = 1650,
+    start_x      = 1700,
+    start_w      = 10,
+    parents      = [satellite_line_1, satellite_line_2],
+    in_assembly  = orbit,
+    index        = -1,
+)
+
+satellite_merged_line_2 = Lineage.create_in_assembly_from_merge(
+    diagram      = diagram,
+    color        = color_gray,
+    merge_from_x = 1650,
+    start_x      = 1700,
+    start_w      = 10,
+    parents      = [satellite_line_3, satellite_line_4],
+    in_assembly  = orbit,
+    index        = +1,
+)
+
+satellite_line_1, satellite_line_2 = satellite_merged_line_1.split(
+    start_x    = 1750,
+    split_to_x = 1800,
+    children_specs = [
+        {
+            "color":       color_blue,
+            "target_w":    5,
+            "in_assembly": orbit,
+            "index":       -1,
+        },
+        {
+            "color":       color_red,
+            "target_w":    5,
+            "in_assembly": orbit,
+            "index":       -1,
+        },
+    ]
+)
+
+satellite_line_3, satellite_line_4 = satellite_merged_line_2.split(
+    start_x    = 1750,
+    split_to_x = 1800,
+    children_specs = [
+        {
+            "color":       color_green,
+            "target_w":    5,
+            "in_assembly": orbit,
+            "index":       +1,
+        },
+        {
+            "color":       color_yellow,
+            "target_w":    5,
+            "in_assembly": orbit,
+            "index":       +1,
+        },
+    ]
+)
+
 
 
 
@@ -1312,6 +1372,68 @@ line_color.shift_to(from_x=1700, to_x=1800, to_y=1200)
 line_color.shade(   from_x=1725, to_x=1775, color=color_yellow)
 line_color.shift_to(from_x=1900, to_x=1950, to_y=1250)
 line_color.shade(   from_x=1900, to_x=1950, color=color_white)
+
+
+
+
+
+# -----------------------------------------------------------------------------
+# 12. Transferring between assemblies
+# -----------------------------------------------------------------------------
+
+orbit_line = Lineage(
+    diagram = diagram,
+    color   = color_white,
+    start_x = 0,
+    start_y = 1350,
+    start_w = 10
+)
+orbit = Orbit(diagram, orbit_line, margin=3)
+
+bundle = Bundle(
+    diagram =  diagram,
+    start_x = 0,
+    start_y = 1400,
+    margin  = 3,
+)
+
+satellite_line_1 = Lineage.create_in_assembly(
+    diagram = diagram,
+    color   = color_blue,
+    start_x = 0,
+    start_w = 5,
+    in_assembly = orbit,
+    index       = -1,
+)
+satellite_line_2 = Lineage.create_in_assembly(
+    diagram = diagram,
+    color   = color_red,
+    start_x = 0,
+    start_w = 5,
+    in_assembly = orbit,
+    index       = +1,
+)
+
+satellite_line_3 = Lineage.create_in_assembly(
+    diagram = diagram,
+    color   = color_green,
+    start_x = 0,
+    start_w = 5,
+    in_assembly = bundle,
+)
+satellite_line_4 = Lineage.create_in_assembly(
+    diagram = diagram,
+    color   = color_yellow,
+    start_x = 0,
+    start_w = 5,
+    in_assembly = bundle,
+)
+
+satellite_line_1.reorder(from_x=100, to_x=150, in_assembly=orbit, new_index=+1)
+# satellite_line_2.reorder(from_x=100, to_x=150, in_assembly=orbit, new_index=-1)
+
+satellite_line_3.reorder(from_x=100, to_x=150, in_assembly=bundle, new_index=2)
+# satellite_line_4.reorder(from_x=100, to_x=150, in_assembly=bundle, new_index=0)
 
 
 

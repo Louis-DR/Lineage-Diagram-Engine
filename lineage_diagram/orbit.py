@@ -124,10 +124,9 @@ class Orbit:
             # The center of the new member:
             # Current surface + gap + half_width
             center_offset = current_offset + gap + width / 2
-            offsets[upper_membership.lineage] = center_offset
-
             # Advance surface
             current_offset += gap + width
+            offsets[upper_membership.lineage] = center_offset
 
         # Process Lower Side
         current_offset = -half_main
@@ -164,7 +163,18 @@ class Orbit:
              # Check if range is within available points
              pass
 
-        # Actually, let's implement `solve_geometry` properly first.
+        # Interpolate start if missing
+        if not filtered_upper or (filtered_upper and filtered_upper[0].real > start_x + 1e-5):
+            upper_point, lower_point = self._get_member_geometry_at(start_x, lineage)
+            filtered_upper.insert(0, upper_point)
+            filtered_lower.insert(0, lower_point)
+
+        # Interpolate end if missing
+        if not filtered_upper or (filtered_upper and filtered_upper[-1].real < end_x - 1e-5):
+            upper_point, lower_point = self._get_member_geometry_at(end_x, lineage)
+            filtered_upper.append(upper_point)
+            filtered_lower.append(lower_point)
+
         return filtered_upper, filtered_lower
 
     def solve_geometry(self):

@@ -48,37 +48,47 @@ class Lineage(ScalablePath, ShiftablePath):
     self.visual_end_x    = None  # Controls when to stop drawing (independent of width calculations)
 
   @classmethod
-  def create_in_bundle(
+  def create_in_assembly(
       cls,
       diagram:         "Diagram",
       color:            str,
       start_x:          float,
       start_w:          float,
-      in_bundle:       "Bundle",
+      in_assembly:     "Bundle | Orbit",
       index:            int   = -1,
       fade_in_duration: float = 0.0,
       z:                float = 0.0,
     ) -> "Lineage":
-    """Create a lineage that starts inside a bundle."""
-    # Create the instance
-    instance = cls(diagram, color, start_x, 0, start_w, z=z)
+    """Create a lineage that starts inside an assembly."""
+    # For Orbit, index is mandatory and cannot be 0 (or -1 default if not handled)
+    # But let's assume the caller provides a valid index for Orbit.
+    # Bundle handles -1 as append.
 
-    # Register membership taking into accound fade-in duration
+    # Create the lineage
+    # We start at y=0 because the assembly controls the position
+    new_lineage = cls(diagram, color, start_x, 0, start_w, z=z)
+
+    # Add to assembly
+    # Note: Orbit.add_member requires index. Bundle.add_member defaults index=-1.
+    # We pass index explicitly.
+    # We must account for fade_in_duration so that at start_x the lineage is fully visible (factor 1.0)
     start_membership_x = start_x - fade_in_duration
-    in_bundle.add_member(
-      lineage          = instance,
+    in_assembly.add_member(
+      lineage          = new_lineage,
       start_x          = start_membership_x,
       end_x            = diagram.view_width,
       fade_in_duration = fade_in_duration,
       index            = index,
     )
 
-    # Set internal state so compile_segments knows it starts dependent
-    instance._initial_bundle = in_bundle
-    return instance
+    # Record initial assembly state
+    new_lineage._initial_bundle = in_assembly # ToDo: Rename _initial_bundle to _initial_assembly
 
+    return new_lineage
+
+  # Create a lineage inside an assembly resulting from the merge of parents.
   @classmethod
-  def create_in_bundle_from_merge(
+  def create_in_assembly_from_merge(
       cls,
       diagram:     "Diagram",
       color:        str,
@@ -86,22 +96,14 @@ class Lineage(ScalablePath, ShiftablePath):
       start_x:      float,
       start_w:      float,
       parents:      list["Lineage"],
-      in_bundle:   "Bundle",
+      in_assembly: "Bundle | Orbit",
       index:        int   = -1,
       z:            float = 0.0,
     ) -> "Lineage":
-    """Create a lineage inside a bundle resulting from the merge of parents."""
+    """Create a lineage inside an assembly resulting from the merge of parents."""
     return cls.create_from_merge(
-      diagram      = diagram,
-      color        = color,
-      merge_from_x = merge_from_x,
-      start_x      = start_x,
-      start_y      = 0, # Ignored when in_bundle is set
-      start_w      = start_w,
-      parents      = parents,
-      in_bundle    = in_bundle,
-      index        = index,
-      z            = z,
+      diagram, color, merge_from_x, start_x, 0, start_w, parents,
+      in_assembly=in_assembly, index=index, z=z
     )
 
   @staticmethod
@@ -232,15 +234,15 @@ class Lineage(ScalablePath, ShiftablePath):
       start_y:      float,
       start_w:      float,
       parents:      list["Lineage"],
-      in_bundle:   "Bundle" = None,
+      in_assembly: "Bundle | Orbit" = None,
       index:        int     = -1,
       z:            float   = 0.0,
     ) -> "Lineage":
     """Create a lineage resulting from the merge of parents."""
-    if in_bundle:
+    if in_assembly:
       fade_in_duration = start_x - merge_from_x
-      child            = cls.create_in_bundle(diagram, color, start_x, start_w, in_bundle, index, fade_in_duration, z=z)
-      # If in bundle, start_y is ignored/dynamic. We use 0 as base for relative calculations if needed,
+      child            = cls.create_in_assembly(diagram, color, start_x, start_w, in_assembly, index, fade_in_duration, z=z)
+      # If in assembly, start_y is ignored/dynamic. We use 0 as base for relative calculations if needed,
       # but really we should rely on the child's dynamic position.
       # For the layout calculation below, we assume centered around 0 (relative) and will use target_lineage offset.
       layout_base_y = 0
@@ -316,12 +318,12 @@ class Lineage(ScalablePath, ShiftablePath):
            parent_bundle = parent._initial_bundle
 
       # Determine target parameters
-      # If child is in bundle, we target the child lineage dynamically
-      target_lineage = child if in_bundle else None
+      # If child is in assembly, we target the child lineage dynamically
+      target_lineage = child if in_assembly else None
       # If targeting a lineage, the Y is an offset from that lineage's center.
       # If targeting absolute Y, it is the calculated center.
-      target_y = parent_center if not in_bundle else 0.0
-      offset_y = parent_center if     in_bundle else 0.0
+      target_y = parent_center if not in_assembly else 0.0
+      offset_y = parent_center if     in_assembly else 0.0
 
       if parent_bundle:
         parent.leave(
@@ -362,8 +364,8 @@ class Lineage(ScalablePath, ShiftablePath):
       - color: str
       - target_w: float
       - target_y: float (optional, for independent)
-      - in_bundle: Bundle (optional)
-      - index: int (optional, for bundle)
+      - in_assembly: Bundle | Orbit (optional)
+      - index: int (optional, for assembly)
       - z: float (optional, default 0.0)
     """
     # Sort children specs by target_y (or index if in bundle)
@@ -404,10 +406,10 @@ class Lineage(ScalablePath, ShiftablePath):
 
     children = []
     for spec, start_w, start_center_rel in zip(children_specs, children_start_widths, children_start_centers_relative):
-      color     = spec['color']
-      target_w  = spec['target_w']
-      in_bundle = spec.get('in_bundle')
-      index     = spec.get('index', -1)
+      color       = spec['color']
+      target_w    = spec['target_w']
+      in_assembly = spec.get('in_assembly')
+      index       = spec.get('index', -1)
       index     = spec.get('index', -1)
       target_y  = spec.get('target_y', 0)
       z         = spec.get('z', 0.0)
@@ -453,11 +455,11 @@ class Lineage(ScalablePath, ShiftablePath):
       child.scale_to(start_x, split_to_x, target_w)
 
       # Transition position
-      if in_bundle:
-        # Join bundle
-        # We want to join such that at split_to_x we are in the bundle.
+      if in_assembly:
+        # Join assembly
+        # We want to join such that at split_to_x we are in the assembly.
         # `join` takes (from_x, to_x).
-        child.join(start_x, split_to_x, in_bundle, index)
+        child.join(start_x, split_to_x, in_assembly, index)
       else:
         # Shift to target Y
         child.shift_to(start_x, split_to_x, target_y)
@@ -523,11 +525,11 @@ class Lineage(ScalablePath, ShiftablePath):
       new_color:         str,
       new_target_w:      float,
       new_target_y:      float   = 0.0,
-      new_in_bundle:    "Bundle" = None,
+      new_in_assembly:  "Bundle | Orbit" = None,
       new_index:         int     = -1,
       parent_target_w:   float   = 0.0,
       parent_target_y:   float   = 0.0,
-      parent_in_bundle: "Bundle" = None,
+      parent_in_assembly: "Bundle | Orbit" = None,
       parent_index:      int     = -1,
       new_z:             float   = 0.0,
     ) -> "Lineage":
@@ -539,20 +541,18 @@ class Lineage(ScalablePath, ShiftablePath):
 
     # 2. Prepare specs for sorting
     parent_spec = {
-        'type':      'parent',
-        'target_w':  parent_target_w,
-        'target_y':  parent_target_y,
-        'in_bundle': parent_in_bundle,
-        'index':     parent_index
+        'type':        'parent',
+        'target_w':    parent_target_w,
+        'target_y':    parent_target_y,
+        'in_assembly': parent_in_assembly,
+        'index':       parent_index
     }
     new_spec = {
-        'type':      'new',
-        'target_w':  new_target_w,
-        'target_y':  new_target_y,
-        'in_bundle': new_in_bundle,
-        'index':     new_index,
-        'in_bundle': new_in_bundle,
-        'index':     new_index,
+        'type':        'new',
+        'target_w':    new_target_w,
+        'target_y':    new_target_y,
+        'in_assembly': new_in_assembly,
+        'index':       new_index,
         'color':     new_color,
         'z':         new_z
     }
@@ -561,8 +561,8 @@ class Lineage(ScalablePath, ShiftablePath):
 
     # Sort based on target Y
     def get_spec_y(spec):
-        if spec['in_bundle']:
-            # If in bundle, use index as proxy? Or 0?
+        if spec['in_assembly']:
+            # If in assembly, use index as proxy? Or 0?
             return spec['index']
         return spec['target_y']
 
@@ -613,11 +613,11 @@ class Lineage(ScalablePath, ShiftablePath):
             # Jump to packed state at start_x
             parent.scale_to(start_x, start_x, packed_w)
 
-            if spec['in_bundle']:
-                 # If jumping into a bundle instantly?
+            if spec['in_assembly']:
+                 # If jumping into an assembly instantly?
                  # Usually parent continues in same context or switches.
-                 # If switching to bundle, we join.
-                 # If already in bundle, we might need to jump index?
+                 # If switching to assembly, we join.
+                 # If already in assembly, we might need to jump index?
                  # For now, let's assume position jump is handled by shift/join logic.
                  pass
             else:
@@ -627,8 +627,8 @@ class Lineage(ScalablePath, ShiftablePath):
             parent.scale_to(start_x, split_to_x, spec['target_w'])
 
             # Position
-            if spec['in_bundle']:
-                parent.join(start_x, split_to_x, spec['in_bundle'], spec['index'])
+            if spec['in_assembly']:
+                parent.join(start_x, split_to_x, spec['in_assembly'], spec['index'])
             else:
                 parent.shift_to(start_x, split_to_x, spec['target_y'])
 
@@ -650,8 +650,8 @@ class Lineage(ScalablePath, ShiftablePath):
                 new_lineage.shade(start_x, shade_end, spec['color'])
             new_lineage.scale_to(start_x, split_to_x, spec['target_w'])
 
-            if spec['in_bundle']:
-                new_lineage.join(start_x, split_to_x, spec['in_bundle'], spec['index'])
+            if spec['in_assembly']:
+                new_lineage.join(start_x, split_to_x, spec['in_assembly'], spec['index'])
             else:
                 new_lineage.shift_to(start_x, split_to_x, spec['target_y'])
 
@@ -1147,6 +1147,7 @@ class Lineage(ScalablePath, ShiftablePath):
       new_target_y:    float,
       new_in_bundle:   "Bundle" = None,
       new_index:       int      = -1,
+      z:               float    = 0.0,
     ) -> "Lineage":
     """
     Create a new lineage that starts at the edge of the parent lineage.
@@ -1175,7 +1176,7 @@ class Lineage(ScalablePath, ShiftablePath):
         start_y = (parent_y_at_start + parent_w / 2) - new_target_w / 2
 
     # 3. Create new lineage
-    new_lineage = cls(parent.diagram, new_color, start_x, start_y, new_target_w)
+    new_lineage = cls(parent.diagram, new_color, start_x, start_y, new_target_w, z=z)
 
     if new_in_bundle:
         new_lineage.join(start_x, transition_to_x, new_in_bundle, new_index)
