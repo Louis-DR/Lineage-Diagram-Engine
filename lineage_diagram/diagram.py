@@ -1,5 +1,7 @@
 from typing import TYPE_CHECKING
 
+from .timeline import BoundarySide
+
 if TYPE_CHECKING:
   from .lineage import Lineage
   from .bundle  import Bundle
@@ -32,15 +34,30 @@ class Diagram:
 
   def add_lineage(self, lineage:"Lineage"):
     """Register a lineage to the diagram."""
+    lineage.id = f"lineage-{len(self._lineages)}"
     self._lineages.append(lineage)
 
   def add_bundle(self, bundle:"Bundle"):
     """Register a bundle to the diagram."""
+    bundle.id = f"bundle-{len(self._bundles)}"
     self._bundles.append(bundle)
 
   def add_orbit(self, orbit:"Orbit"):
     """Register an orbit to the diagram."""
+    orbit.id = f"orbit-{len(self._orbits)}"
     self._orbits.append(orbit)
+
+  def _lineage_by_id(self, lineage_id: str) -> "Lineage":
+    try:
+      return next(lineage for lineage in self._lineages if lineage.id == lineage_id)
+    except StopIteration as error:
+      raise KeyError(f"Unknown lineage ID: {lineage_id}") from error
+
+  def state_at(self, lineage_id: str, x: float, side: BoundarySide = BoundarySide.RIGHT):
+    return self._lineage_by_id(lineage_id).state_at(x, side)
+
+  def frame_at(self, lineage_id: str, x: float, side: BoundarySide = BoundarySide.RIGHT):
+    return self._lineage_by_id(lineage_id).frame_at(x, side)
 
   def compile(self) -> list["Lineage"]:
     """Compile layout geometry and return lineages in drawing order."""

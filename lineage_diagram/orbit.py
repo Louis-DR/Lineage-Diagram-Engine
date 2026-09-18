@@ -3,6 +3,8 @@ from dataclasses import dataclass
 from typing import TYPE_CHECKING, Optional
 
 from .utils import smootherstep, find_t_at_x
+from .sampling import diagram_event_xs
+from .topology import AssemblyReservation, ReorderTransition
 
 if TYPE_CHECKING:
     from .lineage import Lineage
@@ -31,6 +33,8 @@ class Orbit:
         self.main_lineage = main_lineage
         self.margin       = margin
         self._memberships: list[OrbitMembership] = []
+        self._reservations: list[AssemblyReservation] = []
+        self._reorder_events: list[ReorderTransition] = []
 
         # Computed points for members
         self._compiled_member_points: dict["Lineage",tuple[list[complex],list[complex]]] = {}
@@ -66,6 +70,37 @@ class Orbit:
         """Return memberships active at X."""
         return [membership for membership in self._memberships if membership.start_x <= x + 1e-5 and x <= membership.end_x + 1e-5]
 
+    def reserve_member(self, lineage:"Lineage", start_x:float, end_x:float, *, fade_in:bool, index:int=-1):
+        self._reservations.append(AssemblyReservation(
+            lineage=lineage,
+            start_x=start_x,
+            end_x=end_x,
+            fade_in_duration=end_x - start_x if fade_in else 0.0,
+            fade_out_duration=0.0 if fade_in else end_x - start_x,
+            index=index,
+        ))
+
+    def reorder_member(self, lineage:"Lineage", from_x:float, to_x:float, new_index:int):
+        if new_index == 0:
+            raise ValueError("Orbit index cannot be 0")
+        self._reorder_events.append(ReorderTransition(lineage, from_x, to_x, new_index))
+
+    def _get_layout_memberships_at(self, x:float):
+        memberships = list(self.get_memberships_at(x))
+        memberships.extend(
+            reservation for reservation in self._reservations
+            if reservation.start_x < x < reservation.end_x
+            and not any(membership.lineage is reservation.lineage for membership in memberships)
+        )
+        return memberships
+
+    def _index_at(self, membership, x:float) -> int:
+        index = membership.index
+        for event in sorted(self._reorder_events, key=lambda item: (item.to_x, item.from_x)):
+            if event.lineage is membership.lineage and x + 1e-5 >= event.to_x:
+                index = event.new_index
+        return index
+
     def _get_factor(self, membership:OrbitMembership, x:float) -> float:
         """Calculate the presence factor (0 to 1) of a member at position X."""
         # Fade In
@@ -82,7 +117,7 @@ class Orbit:
         # Stable
         return 1.0
 
-    def _calculate_layout(self, memberships:list[OrbitMembership], x:float) -> dict["Lineage",float]:
+    def _calculate_layout(self, memberships:list[OrbitMembership], x:float, index_overrides=None) -> dict["Lineage",float]:
         """
         Calculate the offset from the main lineage center for each member at X.
         Returns a dict mapping lineage to its center offset.
@@ -95,15 +130,17 @@ class Orbit:
 
         # Upper: index > 0. Sort by index (ascending).
         # Stable sort preserves the reversed order for ties (Newest first).
+        index_overrides = index_overrides or {}
+        get_index = lambda membership: index_overrides.get(membership.lineage, self._index_at(membership, x))
         upper_memberships = sorted(
-            [membership for membership in reversed_memberships if membership.index > 0],
-            key=lambda membership: membership.index
+            [membership for membership in reversed_memberships if get_index(membership) > 0],
+            key=get_index
         )
 
         # Lower: index < 0. Sort by abs(index) (ascending).
         lower_memberships = sorted(
-            [membership for membership in reversed_memberships if membership.index < 0],
-            key=lambda membership: abs(membership.index)
+            [membership for membership in reversed_memberships if get_index(membership) < 0],
+            key=lambda membership: abs(get_index(membership))
         )
         # We need the main lineage width at X to know where the surface is.
         main_width = self.main_lineage.get_width_at(x)
@@ -146,6 +183,23 @@ class Orbit:
 
         return offsets
 
+    def _layout_at(self, x:float):
+        memberships = self._get_layout_memberships_at(x)
+        offsets = self._calculate_layout(memberships, x)
+        active_event = next((event for event in self._reorder_events if event.from_x < x < event.to_x), None)
+        if active_event is None:
+            return memberships, offsets
+        after_offsets = self._calculate_layout(
+            memberships,
+            x,
+            {active_event.lineage: active_event.new_index},
+        )
+        factor = smootherstep((x - active_event.from_x) / (active_event.to_x - active_event.from_x))
+        return memberships, {
+            lineage: offset + (after_offsets.get(lineage, offset) - offset) * factor
+            for lineage, offset in offsets.items()
+        }
+
     def get_compiled_points_for(self, lineage:"Lineage", start_x:float, end_x:float) -> tuple[list[complex],list[complex]]:
         """Retrieve pre-calculated points."""
         if lineage not in self._compiled_member_points:
@@ -187,10 +241,10 @@ class Orbit:
         steps   = diagram.resolution
 
         # We iterate X from 0 to width
-        xs = np.linspace(0, diagram.view_width, steps)
+        xs = sorted({*np.linspace(0, diagram.view_width, steps), *diagram_event_xs(diagram)})
 
         for x in xs:
-            memberships = self.get_memberships_at(x)
+            memberships, offsets = self._layout_at(x)
             if not memberships: continue
 
             # Get main lineage geometry
@@ -207,8 +261,6 @@ class Orbit:
                 normal = diff / abs(diff)
 
             # Calculate offsets
-            offsets = self._calculate_layout(memberships, x)
-
             for membership in memberships:
                 offset = offsets[membership.lineage]
                 width  = membership.lineage.get_width_at(x) * self._get_factor(membership, x)
@@ -225,7 +277,7 @@ class Orbit:
 
     def _get_member_geometry_at(self, x:float, lineage:"Lineage") -> tuple[complex,complex]:
         """Calculate the upper and lower points of a member at a specific X."""
-        memberships = self.get_memberships_at(x)
+        memberships, offsets = self._layout_at(x)
         target_membership = next((m for m in memberships if m.lineage == lineage), None)
         if not target_membership:
             # Fallback
@@ -240,7 +292,6 @@ class Orbit:
         else:
             normal = diff / abs(diff)
 
-        offsets = self._calculate_layout(memberships, x)
         offset  = offsets[lineage]
         width   = lineage.get_width_at(x) * self._get_factor(target_membership, x)
 
@@ -252,7 +303,7 @@ class Orbit:
 
     def get_center_point_of_member_at(self, x:float, lineage:"Lineage") -> complex:
         """Finds the geometric center of the lineage within the orbit at position X."""
-        memberships = self.get_memberships_at(x)
+        memberships, offsets = self._layout_at(x)
         target_m = next((m for m in memberships if m.lineage == lineage), None)
         if not target_m:
             # Fallback
@@ -267,7 +318,6 @@ class Orbit:
         else:
             normal = diff / abs(diff)
 
-        offsets = self._calculate_layout(memberships, x)
         offset  = offsets[lineage]
 
         return main_center + normal * offset

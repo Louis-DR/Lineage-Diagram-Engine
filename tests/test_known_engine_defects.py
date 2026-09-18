@@ -22,7 +22,6 @@ def _violations(report, kind):
   return [violation for violation in report["violations"] if violation["kind"] == kind]
 
 
-@pytest.mark.xfail(reason="Reorder creates duplicate memberships and an edge seam")
 def test_bundle_reorder_is_continuous_and_has_one_membership():
   report = diagnose_fixture(bundle_reorder())
   assert not _violations(report, "segment-seam")
@@ -30,7 +29,6 @@ def test_bundle_reorder_is_continuous_and_has_one_membership():
   assert not _violations(report, "multiple-active-memberships")
 
 
-@pytest.mark.xfail(reason="Orbit reorder overwrites duplicate membership geometry")
 def test_orbit_reorder_is_continuous_and_has_one_membership():
   report = diagnose_fixture(orbit_reorder())
   assert not _violations(report, "segment-seam")
@@ -38,19 +36,16 @@ def test_orbit_reorder_is_continuous_and_has_one_membership():
   assert not _violations(report, "multiple-active-memberships")
 
 
-@pytest.mark.xfail(reason="terminate_at does not clip assembly membership")
 def test_termination_closes_assembly_membership():
   report = diagnose_fixture(assembled_termination())
   assert not _violations(report, "membership-after-termination")
 
 
-@pytest.mark.xfail(reason="Transfer is represented by two simultaneously active memberships")
 def test_transfer_emits_one_member_geometry_per_x():
   report = diagnose_fixture(bundle_transfer())
   assert not _violations(report, "multiple-active-memberships")
 
 
-@pytest.mark.xfail(reason="Membership operations do not validate the current topology state")
 def test_leave_while_independent_is_rejected_immediately():
   diagram = Diagram(200, 100)
   bundle = Bundle(diagram, 0, 50, 4)
@@ -59,7 +54,6 @@ def test_leave_while_independent_is_rejected_immediately():
     lineage.leave(20, 40, bundle, 60)
 
 
-@pytest.mark.xfail(reason="Automatic split sandwich indices are calculated after children join")
 def test_bundle_split_replaces_parent_slot_before_layout():
   diagram = Diagram(240, 120, resolution=100)
   bundle = Bundle(diagram, 0, 60, 3)
@@ -75,7 +69,6 @@ def test_bundle_split_replaces_parent_slot_before_layout():
   assert active == [top, first, second, bottom]
 
 
-@pytest.mark.xfail(reason="Baseline Bezier and _get_y_at use different interpolation models")
 def test_state_query_matches_rendered_baseline_during_overlapping_shift():
   fixture = overlapping_shifts()
   lineage = fixture.lineages["lineage"]
@@ -90,7 +83,6 @@ def test_state_query_matches_rendered_baseline_during_overlapping_shift():
   [independent_transform, bundle_join_leave, moving_orbit],
   ids=lambda builder: builder.__name__,
 )
-@pytest.mark.xfail(reason="Sampling does not guarantee every direct or dependent event boundary is present")
 def test_geometry_samples_event_boundaries_exactly(builder):
   report = diagnose_fixture(builder())
   assert not _violations(report, "event-boundary-missing")

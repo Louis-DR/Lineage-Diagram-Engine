@@ -5,6 +5,8 @@ from typing      import TYPE_CHECKING
 
 from .paths      import ShiftablePath, ShiftEvent
 from .utils      import find_t_at_x, smootherstep
+from .sampling   import diagram_event_xs
+from .topology   import AssemblyReservation, ReorderTransition
 
 if TYPE_CHECKING:
   from .diagram import Diagram
@@ -44,6 +46,8 @@ class Bundle(ShiftablePath):
     # Events lists
     self._shift_events: list[ShiftEvent]       = []
     self._memberships:  list[BundleMembership] = []
+    self._reservations: list[AssemblyReservation] = []
+    self._reorder_events: list[ReorderTransition] = []
 
     # Computed points for members
     self._compiled_member_points: dict["Lineage", tuple[list[complex], list[complex]]] = {}
@@ -113,9 +117,50 @@ class Bundle(ShiftablePath):
       to_y   = to_y,
     ))
 
+  def reserve_member(
+      self,
+      lineage: "Lineage",
+      start_x: float,
+      end_x: float,
+      *,
+      fade_in: bool,
+      index: int = -1,
+    ):
+    self._reservations.append(AssemblyReservation(
+      lineage=lineage,
+      start_x=start_x,
+      end_x=end_x,
+      fade_in_duration=end_x - start_x if fade_in else 0.0,
+      fade_out_duration=0.0 if fade_in else end_x - start_x,
+      index=index,
+    ))
+
+  def reorder_member(self, lineage: "Lineage", from_x: float, to_x: float, new_index: int):
+    self._reorder_events.append(ReorderTransition(lineage, from_x, to_x, new_index))
+
   def get_memberships_at(self, x:float) -> list[BundleMembership]:
     """Return memberships active at X, sorted by insertion order."""
-    return [membership for membership in self._memberships if membership.start_x <= x + 1e-5 and x <= membership.end_x + 1e-5]
+    memberships = [membership for membership in self._memberships if membership.start_x <= x + 1e-5 and x <= membership.end_x + 1e-5]
+    for event in sorted(self._reorder_events, key=lambda item: (item.to_x, item.from_x)):
+      if x + 1e-5 < event.to_x:
+        continue
+      target = next((membership for membership in memberships if membership.lineage is event.lineage), None)
+      if target is None:
+        continue
+      memberships.remove(target)
+      memberships.insert(max(0, min(event.new_index, len(memberships))), target)
+    return memberships
+
+  def _get_layout_memberships_at(self, x: float):
+    memberships = list(self.get_memberships_at(x))
+    for reservation in self._reservations:
+      if (
+        reservation.start_x < x < reservation.end_x
+        and not any(membership.lineage is reservation.lineage for membership in memberships)
+      ):
+        index = len(memberships) if reservation.index == -1 else max(0, min(reservation.index, len(memberships)))
+        memberships.insert(index, reservation)
+    return memberships
 
   def _get_factor(self, membership:BundleMembership, x:float) -> float:
     """Calculate the presence factor (0 to 1) of a member at position X."""
@@ -175,6 +220,38 @@ class Bundle(ShiftablePath):
 
     return effective_widths, gaps
 
+  def _calculate_offsets(self, memberships, x: float) -> tuple[dict["Lineage", float], dict["Lineage", float]]:
+    widths, gaps = self._calculate_layout(memberships, x)
+    current_offset = -(sum(widths) + sum(gaps)) / 2
+    offsets = {}
+    width_by_lineage = {}
+    for membership, width, gap in zip(memberships, widths, gaps):
+      offsets[membership.lineage] = current_offset + width / 2
+      width_by_lineage[membership.lineage] = width
+      current_offset += width + gap
+    return offsets, width_by_lineage
+
+  def _layout_at(self, x: float):
+    memberships = self._get_layout_memberships_at(x)
+    offsets, widths = self._calculate_offsets(memberships, x)
+    active_event = next((event for event in self._reorder_events if event.from_x < x < event.to_x), None)
+    if active_event is None:
+      return memberships, offsets, widths
+
+    after = list(memberships)
+    target = next((membership for membership in after if membership.lineage is active_event.lineage), None)
+    if target is None:
+      return memberships, offsets, widths
+    after.remove(target)
+    after.insert(max(0, min(active_event.new_index, len(after))), target)
+    after_offsets, _ = self._calculate_offsets(after, x)
+    factor = smootherstep((x - active_event.from_x) / (active_event.to_x - active_event.from_x))
+    offsets = {
+      lineage: offset + (after_offsets.get(lineage, offset) - offset) * factor
+      for lineage, offset in offsets.items()
+    }
+    return memberships, offsets, widths
+
   def solve_geometry(self):
     """Pre-calculate baseline and stacking for the whole duration."""
     baseline_path = self.get_baseline_path()
@@ -183,30 +260,27 @@ class Bundle(ShiftablePath):
     self._compiled_member_points = {membership.lineage: ([],[]) for membership in self._memberships}
     self._compiled_member_samples = {membership.lineage: [] for membership in self._memberships}
 
-    # Work step by step at the configured resolution
-    for t in np.linspace(0, 1, self.diagram.resolution):
+    # Sample uniformly and exactly at every authored event boundary.
+    sample_ts = set(np.linspace(0, 1, self.diagram.resolution))
+    for event_x in diagram_event_xs(self.diagram):
+      if self.start_x <= event_x <= self.end_x:
+        sample_ts.add(find_t_at_x(baseline_path, event_x))
+    for t in sorted(sample_ts):
       # Get parameters at this position alongside the path
       point  = baseline_path.point(t)
       normal = baseline_path.normal(t)
       x      = point.real
 
-      memberships = self.get_memberships_at(x)
+      memberships, offsets, width_by_lineage = self._layout_at(x)
       if not memberships: continue
 
-      # Get the widths and gaps
-      widths, gaps = self._calculate_layout(memberships, x)
-
-      # Total bundle width
-      bundle_width = sum(widths) + sum(gaps)
-
-      # Initial offset, start at the top
-      current_offset = -bundle_width / 2
-
       # Iterate over members in order
-      for membership, member_width, member_gap in zip(memberships, widths, gaps):
+      for membership in memberships:
+        member_width = width_by_lineage[membership.lineage]
+        center_offset = offsets[membership.lineage]
         # Offset lines of this member
-        upper_offset = current_offset + member_width
-        lower_offset = current_offset
+        upper_offset = center_offset + member_width / 2
+        lower_offset = center_offset - member_width / 2
 
         # Compute the points of the upper and lower edges of the path
         upper_point = point + normal * upper_offset
@@ -217,8 +291,6 @@ class Bundle(ShiftablePath):
         self._compiled_member_points[membership.lineage][1].append(lower_point)
         self._compiled_member_samples[membership.lineage].append((x, upper_point, lower_point))
 
-        # Update bundle offset
-        current_offset += member_width + member_gap
 
   def _get_member_geometry_at(self, x:float, lineage:"Lineage") -> tuple[complex,complex]:
     """Calculate the upper and lower points of a member at a specific X."""
@@ -230,28 +302,18 @@ class Bundle(ShiftablePath):
     normal         = baseline_path.normal(t)
     x_on_path      = point.real
 
-    memberships    = self.get_memberships_at(x_on_path)
-
-    # Get the widths and gaps
-    widths, gaps   = self._calculate_layout(memberships, x_on_path)
-
-    # Total bundle width
-    bundle_width   = sum(widths) + sum(gaps)
-
-    # Initial offset, start at the top
-    current_offset = -bundle_width / 2
+    memberships, offsets, widths = self._layout_at(x_on_path)
 
     # Iterate over members in order
-    for membership, member_width, member_gap in zip(memberships, widths, gaps):
+    for membership in memberships:
       # If found the requested lineage
       if membership.lineage == lineage:
         # Then return the position of its center
-        upper_point = point + normal * (current_offset + member_width)
-        lower_point = point + normal * current_offset
+        member_width = widths[lineage]
+        center_offset = offsets[lineage]
+        upper_point = point + normal * (center_offset + member_width / 2)
+        lower_point = point + normal * (center_offset - member_width / 2)
         return upper_point, lower_point
-
-      # Else update the bundle offset
-      current_offset += member_width + member_gap
 
     # Lineage not found, fallback to bundle center
     print(f"ERROR: Lineage not found in bundle at {x=}.")

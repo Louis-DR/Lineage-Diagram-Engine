@@ -5,6 +5,7 @@ from enum        import Enum
 from typing      import Optional, TYPE_CHECKING, Any
 
 from .utils      import smootherstep
+from .timeline   import NumericTimeline, PositionTimeline
 
 if TYPE_CHECKING:
   from .bundle import Bundle
@@ -58,50 +59,8 @@ class ShiftablePath(PathBase):
 
   def get_baseline_path(self) -> svg.Path:
     """Generate the baseline SVG path of the object."""
-    baseline_path = svg.Path()
-    last_point    = complex(self.start_x, self.start_y)
-
-    # Sort events by time
-    self._shift_events.sort(key=lambda shift_event: shift_event.from_x)
-
-    # Iterate over shift events in order
-    for shift in self._shift_events:
-      start_shift_point = complex(shift.from_x, last_point.imag)
-
-      # Add line from previous shift if not touching
-      if start_shift_point != last_point:
-        baseline_path.append(svg.Line(last_point, start_shift_point))
-
-      # Compute control points
-      # The shift.to_y may be resolved dynamically upstream (in Lineage.compile_segments())
-      resolved_to_y = shift.to_y
-
-      # Apply the shift logic using the resolved coordinate
-      end_shift_y = (resolved_to_y if resolved_to_y is not None else 0.0) + shift.offset_y
-      end_shift_point = complex(shift.to_x, end_shift_y)
-      shift_midpoint_x = (start_shift_point.real + end_shift_point.real) / 2
-
-      # Add cubic Bezier curve corresponding to the shift transformation
-      if start_shift_point != end_shift_point:
-        baseline_path.append(svg.CubicBezier(
-          start_shift_point,
-          complex(shift_midpoint_x, start_shift_point.imag),
-          complex(shift_midpoint_x, end_shift_point.imag),
-          end_shift_point
-        ))
-
-      # Update the last point
-      last_point = end_shift_point
-
-    # Line to the end of the object
-    # Use a large number if end_x is not defined (infinite existence)
     effective_end_x = self.end_x if self.end_x is not None else 999999.0
-    end_point = complex(effective_end_x, last_point.imag)
-
-    if end_point != last_point:
-      baseline_path.append(svg.Line(last_point, end_point))
-
-    return baseline_path
+    return PositionTimeline(self.start_x, self.start_y, self._shift_events).path_until(effective_end_x)
 
 class ScalablePath(PathBase):
   """Path with X width that can scale."""
@@ -114,29 +73,4 @@ class ScalablePath(PathBase):
     if self.end_x is not None and x > self.end_x:
       return 0.0
 
-    # Initial width of the object
-    last_width = self.start_w
-
-    # Sort events by time
-    self._scale_events.sort(key=lambda scale_event: scale_event.from_x)
-
-    # Iterate over scale transformations in order
-    for scale_event in self._scale_events:
-      # Before transformation, return width of previous transformation
-      if x <= scale_event.from_x:
-        return last_width
-      # Within transformation, interpolate with smoothing
-      elif scale_event.from_x < x < scale_event.to_x:
-        x1 = scale_event.from_x
-        x2 = scale_event.to_x
-        w1 = last_width
-        w2 = scale_event.to_w
-        ratio_linear = (x - x1) / (x2 - x1)
-        ratio_smooth = smootherstep(ratio_linear)
-        return w1 + (w2 - w1) * ratio_smooth
-      # After transformation, continue to next one
-      else:
-        last_width = scale_event.to_w
-
-    # Reached the end, return width of last transformation
-    return last_width
+    return NumericTimeline(self.start_w, self._scale_events, "to_w").value_at(x)

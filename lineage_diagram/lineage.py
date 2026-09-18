@@ -3,6 +3,9 @@ from typing import TYPE_CHECKING, Optional
 from .paths    import ScalablePath, ShiftablePath, ShiftEvent, ScaleEvent, MembershipEvent, MembershipEventType, ShadeEvent
 from .segments import IndependentSegment, DependentSegment
 from .utils      import smootherstep, find_t_at_x
+from .timeline   import BoundarySide, PositionTimeline
+from .timeline   import ColorTimeline, NumericTimeline
+from .layout     import LineageFrame, LineageState
 
 if TYPE_CHECKING:
   from .diagram import Diagram
@@ -404,13 +407,28 @@ class Lineage(ScalablePath, ShiftablePath):
         elif membership_event.type == MembershipEventType.LEAVE:
           parent_bundle = None
 
+    # Default assembly targets replace the parent's active slot in child order.
+    if parent_bundle:
+      active_memberships = parent_bundle.get_memberships_at(start_x)
+      parent_membership = next((membership for membership in active_memberships if membership.lineage is self), None)
+      if parent_membership is not None:
+        if hasattr(parent_membership, 'index'):
+          next_index = parent_membership.index
+          index_step = 1 if next_index > 0 else -1
+        else:
+          next_index = active_memberships.index(parent_membership)
+          index_step = 1
+        for spec in children_specs:
+          if spec.get('in_assembly') is parent_bundle and 'index' not in spec:
+            spec['index'] = next_index
+            next_index += index_step
+
     children = []
     for spec, start_w, start_center_rel in zip(children_specs, children_start_widths, children_start_centers_relative):
       color       = spec['color']
       target_w    = spec['target_w']
       in_assembly = spec.get('in_assembly')
       index       = spec.get('index', -1)
-      index     = spec.get('index', -1)
       target_y  = spec.get('target_y', 0)
       z         = spec.get('z', 0.0)
 
@@ -473,38 +491,11 @@ class Lineage(ScalablePath, ShiftablePath):
       parent_index = -1
       for i, membership in enumerate(parent_bundle.memberships):
         if membership.lineage == self and membership.start_x <= start_x <= membership.end_x:
-          membership.end_x             = split_to_x
-          membership.fade_out_duration = split_to_x - start_x
+          membership.end_x             = start_x
+          membership.fade_out_duration = 0.0
+          parent_bundle.reserve_member(self, start_x, split_to_x, fade_in=False, index=i)
           parent_index = i
           break
-
-      # Sandwich Logic:
-      # To prevent layout jumps, we insert children around the parent.
-      # Half before, half after.
-      # This ensures the gap loss at the boundaries (Neighbor <-> Child) is compensated
-      # by the internal gaps (Child <-> Parent).
-      if parent_index != -1:
-          mid_point = len(children_specs) // 2
-
-          # First half: insert at parent_index (shifting parent down)
-          # We iterate backwards to keep order: C1, C2, P
-          # Wait, if we insert at K, item at K moves to K+1.
-          # If we want C1, C2, P.
-          # Insert C2 at K. -> C2, P.
-          # Insert C1 at K. -> C1, C2, P.
-          # So we iterate backwards through the first half.
-          for i in range(mid_point - 1, -1, -1):
-              children_specs[i]['index'] = parent_index
-
-          # Second half: insert after parent.
-          # Parent is now at parent_index + mid_point.
-          # We want C3, C4 after P.
-          # Insert C3 at P_index + 1.
-          # Insert C4 at P_index + 2.
-          current_offset = 1
-          for i in range(mid_point, len(children_specs)):
-              children_specs[i]['index'] = parent_index + mid_point + current_offset
-              current_offset += 1
 
       # Visual termination: stop drawing at start_x (clean cut)
       # But keep end_x at split_to_x for bundle layout calculations
@@ -745,6 +736,15 @@ class Lineage(ScalablePath, ShiftablePath):
   def terminate_at(self, x:float):
     """Stop the lineage at X position."""
     self.end_x = x
+    for assembly in (*self.diagram._bundles, *self.diagram._orbits):
+      assembly._memberships = [
+        membership for membership in assembly.memberships
+        if membership.lineage is not self or membership.start_x < x
+      ]
+      for membership in assembly.memberships:
+        if membership.lineage is self and membership.end_x > x:
+          membership.end_x = x
+          membership.fade_out_duration = 0.0
 
   def shift_to(
       self,
@@ -755,41 +755,6 @@ class Lineage(ScalablePath, ShiftablePath):
       offset_y:        float    = 0.0
     ):
     """Shift lineage to new Y position over X range."""
-    # Resolve overlaps with existing shifts
-    new_shifts = []
-    for event in self._shift_events:
-        # 1. No overlap
-        if event.to_x <= from_x or event.from_x >= to_x:
-            new_shifts.append(event)
-            continue
-
-        # 2. Overlap detected
-
-        # Part before new shift
-        if event.from_x < from_x:
-            # Create a truncated copy ending at from_x
-            # We keep the original target Y/lineage.
-            # This effectively speeds up the transition to finish earlier.
-            new_shifts.append(ShiftEvent(
-                from_x         = event.from_x,
-                to_x           = from_x,
-                to_y           = event.to_y,
-                target_lineage = event.target_lineage,
-                offset_y       = event.offset_y
-            ))
-
-        # Part after new shift
-        if event.to_x > to_x:
-            # Create a truncated copy starting at to_x
-            new_shifts.append(ShiftEvent(
-                from_x         = to_x,
-                to_x           = event.to_x,
-                to_y           = event.to_y,
-                target_lineage = event.target_lineage,
-                offset_y       = event.offset_y
-            ))
-
-    self._shift_events = new_shifts
     self._shift_events.append(ShiftEvent(from_x, to_x, to_y, target_lineage, offset_y))
 
   def scale_to(self, from_x:float, to_x:float, to_w:float):
@@ -807,11 +772,12 @@ class Lineage(ScalablePath, ShiftablePath):
     # The lineage starts entering at from_x, and is fully inside at to_x.
     to_assembly.add_member(
       lineage          = self,
-      start_x          = from_x,
+      start_x          = to_x,
       end_x            = self.diagram.view_width,
-      fade_in_duration = to_x - from_x,
+      fade_in_duration = 0.0,
       index            = index,
     )
+    to_assembly.reserve_member(self, from_x, to_x, fade_in=True, index=index)
 
   def leave(
       self,
@@ -823,6 +789,16 @@ class Lineage(ScalablePath, ShiftablePath):
       offset_y:        float    = 0.0
     ):
     """Leave assembly over a transition X range."""
+    active_membership = next((
+      membership for membership in from_assembly.memberships
+      if membership.lineage is self and membership.start_x <= from_x <= membership.end_x
+    ), None)
+    if active_membership is None:
+      raise ValueError("Cannot leave an assembly while the lineage is independent")
+    if hasattr(active_membership, "index"):
+      reservation_index = active_membership.index
+    else:
+      reservation_index = from_assembly.get_memberships_at(from_x).index(active_membership)
     self.membership_events.append(MembershipEvent(
       from_x         = from_x,
       to_x           = to_x,
@@ -834,11 +810,9 @@ class Lineage(ScalablePath, ShiftablePath):
     ))
     # Update assembly membership.
     # The lineage starts leaving at from_x and is fully gone at to_x.
-    for membership in from_assembly.memberships:
-      if membership.lineage == self and membership.start_x <= from_x <= membership.end_x:
-        membership.end_x             = to_x
-        membership.fade_out_duration = to_x - from_x
-        break
+    active_membership.end_x = from_x
+    active_membership.fade_out_duration = 0.0
+    from_assembly.reserve_member(self, from_x, to_x, fade_in=False, index=reservation_index)
 
   def reorder(
       self,
@@ -850,10 +824,15 @@ class Lineage(ScalablePath, ShiftablePath):
     """
     Reorder the lineage within a bundle/orbit over a transition.
     """
-    # Leave current assembly (maintain Y relative to it)
-    self.leave(from_x, to_x, in_assembly, to_y=None)
-    # Join same assembly at new index
-    self.join(from_x, to_x, in_assembly, index=new_index)
+    active_membership = next((
+      membership for membership in in_assembly.memberships
+      if membership.lineage is self and membership.start_x <= from_x <= membership.end_x
+    ), None)
+    if active_membership is None:
+      raise ValueError("Cannot reorder a lineage while it is independent")
+    self.membership_events.append(MembershipEvent(from_x, to_x, MembershipEventType.LEAVE, assembly=in_assembly))
+    self.membership_events.append(MembershipEvent(from_x, to_x, MembershipEventType.JOIN, assembly=in_assembly))
+    in_assembly.reorder_member(self, from_x, to_x, new_index)
 
   def transfer(
       self,
@@ -893,6 +872,54 @@ class Lineage(ScalablePath, ShiftablePath):
     # But typically independent lineages have static Y or shifts we can calculate?
     # For now, return None if not in bundle, implying we fall back to static definition
     return None
+
+  def _assembly_at(self, x: float, side: BoundarySide):
+    for assembly in (*self.diagram._bundles, *self.diagram._orbits):
+      for membership in assembly.memberships:
+        if membership.lineage is not self:
+          continue
+        if side == BoundarySide.LEFT and membership.start_x < x <= membership.end_x:
+          return assembly
+        if side == BoundarySide.RIGHT and membership.start_x <= x < membership.end_x:
+          return assembly
+    return None
+
+  def frame_at(self, x: float, side: BoundarySide = BoundarySide.RIGHT) -> LineageFrame:
+    """Return the authoritative geometric frame at a timeline coordinate."""
+    if x < self.start_x or (self.end_x is not None and x > self.end_x):
+      raise ValueError(f"Coordinate {x} is outside lineage {self.id} lifecycle")
+    if not self._computed_segments:
+      self.diagram.compile()
+
+    query_x = x - 2e-5 if side == BoundarySide.LEFT else x + 2e-5
+    query_x = max(self.start_x, query_x)
+    if self.end_x is not None:
+      query_x = min(self.end_x, query_x)
+    upper, lower = self.get_geometry_at(query_x)
+    center = (upper + lower) / 2
+    width = abs(upper - lower)
+    if width > 1e-12:
+      normal = (upper - lower) / width
+    else:
+      normal = 1j
+    tangent = complex(normal.imag, -normal.real)
+    if tangent.real < 0:
+      tangent = -tangent
+    return LineageFrame(x, center, tangent, normal, width, upper, lower)
+
+  def state_at(self, x: float, side: BoundarySide = BoundarySide.RIGHT) -> LineageState:
+    """Return normalized scalar and topology state at a timeline coordinate."""
+    frame = self.frame_at(x, side)
+    width = NumericTimeline(self.start_w, self._scale_events, "to_w").value_at(x, side)
+    try:
+      color = ColorTimeline(self.color, self._shade_events).value_at(x, side)
+    except ValueError:
+      color = self.color
+      for event in sorted(self._shade_events, key=lambda item: (item.to_x, item.from_x)):
+        if x > event.to_x or (x == event.to_x and side == BoundarySide.RIGHT):
+          color = event.color
+    assembly = self._assembly_at(x, side)
+    return LineageState(self.id, x, frame.center.imag, width, color, assembly.id if assembly else None)
 
   def get_geometry_at(self, x: float) -> tuple[complex, complex]:
     """
@@ -1056,6 +1083,18 @@ class Lineage(ScalablePath, ShiftablePath):
 
              # End point: Center in NEW bundle at to_x
              new_bundle = next_next_event.assembly
+             if new_bundle is current_bundle:
+               self._computed_segments.append(DependentSegment(
+                 diagram = self.diagram,
+                 bundle  = current_bundle,
+                 lineage = self,
+                 start_x = next_event.from_x,
+                 end_x   = min(next_event.to_x, drawing_max_x),
+               ))
+               current_x = next_event.to_x
+               event_index += 2
+               continue
+
              end_center = new_bundle.get_center_point_of_member_at(next_next_event.to_x, self)
 
              transition_shift = ShiftEvent(
@@ -1157,19 +1196,8 @@ class Lineage(ScalablePath, ShiftablePath):
       center_in_bundle = parent_bundle.get_center_point_of_member_at(x, self)
       return center_in_bundle.imag
 
-    # 2. Independent: Interpolate shifts
-    current_y = self.start_y
-    for shift in self._shift_events:
-      if x >= shift.to_x:
-        current_y = shift.to_y
-      elif x > shift.from_x:
-        # Interpolate
-        duration = shift.to_x - shift.from_x
-        if duration > 1e-5:
-            ratio = (x - shift.from_x) / duration
-            factor = smootherstep(ratio)
-            current_y = current_y + (shift.to_y - current_y) * factor
-    return current_y
+    # 2. Independent: use the same normalized cubic timeline as rendering.
+    return PositionTimeline(self.start_x, self.start_y, self._shift_events).value_at(x, BoundarySide.RIGHT)
 
   @classmethod
   def create_from_lineage(
@@ -1288,37 +1316,22 @@ class Lineage(ScalablePath, ShiftablePath):
 
     # Handle Gradient
     if self._shade_events:
-        gradient_id = f"gradient-{id(self)}"
+        gradient_id = f"gradient-{self.id}"
 
-        # Sort events
-        self._shade_events.sort(key=lambda e: e.from_x)
-
-        stops = []
-        # Initial color stop
-        stops.append(f'<stop offset="0%" stop-color="{self.color}"/>')
-
-        current_color = self.color
-
-        for event in self._shade_events:
-            # Calculate offsets as percentage of view_width
-            start_offset = (event.from_x / self.diagram.view_width) * 100
-            end_offset   = (event.to_x / self.diagram.view_width) * 100
-
-            # Clamp offsets
-            start_offset = max(0, min(100, start_offset))
-            end_offset   = max(0, min(100, end_offset))
-
-            # Add stops
-            # Before transition: maintain current color until start
-            stops.append(f'<stop offset="{start_offset}%" stop-color="{current_color}"/>')
-
-            # After transition: new color
-            stops.append(f'<stop offset="{end_offset}%" stop-color="{event.color}"/>')
-
+        try:
+          color_stops = ColorTimeline(self.color, self._shade_events).stops(self.diagram.view_width)
+        except ValueError:
+          color_stops = [(0.0, self.color)]
+          current_color = self.color
+          for event in sorted(self._shade_events, key=lambda item: item.from_x):
+            color_stops.append((event.from_x, current_color))
+            color_stops.append((event.to_x, event.color))
             current_color = event.color
-
-        # Final stop to maintain last color until end
-        stops.append(f'<stop offset="100%" stop-color="{current_color}"/>')
+          color_stops.append((self.diagram.view_width, current_color))
+        stops = [
+          f'<stop offset="{max(0, min(100, x / self.diagram.view_width * 100))}%" stop-color="{color}"/>'
+          for x, color in color_stops
+        ]
 
         gradient_def = f'''
         <defs>
@@ -1336,5 +1349,5 @@ class Lineage(ScalablePath, ShiftablePath):
     if self.diagram.lineage_stroke_width != 0:
       stroke = f'stroke="{fill_attr}" stroke-width="{self.diagram.lineage_stroke_width}"'
 
-    shape_path_svg += f'<path fill="{fill_attr}" {stroke} d="{shape_path_d}"/>'
+    shape_path_svg += f'<path id="{self.id}" fill="{fill_attr}" {stroke} d="{shape_path_d}"/>'
     return shape_path_svg

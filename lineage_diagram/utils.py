@@ -8,7 +8,7 @@ def smootherstep(x:float) -> float:
   """
   return 6 * x**5 - 15 * x**4 + 10 * x**3
 
-def find_t_at_x(path:svg.Path, x:float, tolerance:float=1e-6) -> float:
+def find_t_at_x(path:svg.Path, x:float, tolerance:float=1e-9) -> float:
   """
   Find the parameter t (0 to 1) on the path such that path.point(t).real is close to x.
   Assumes the path is monotonic in X.

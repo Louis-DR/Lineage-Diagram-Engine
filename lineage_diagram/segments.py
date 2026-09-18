@@ -3,6 +3,8 @@ import numpy as np
 from typing import TYPE_CHECKING
 
 from .paths import ShiftablePath, ScalablePath, ShiftEvent, ScaleEvent
+from .sampling import diagram_event_xs
+from .utils import find_t_at_x
 
 if TYPE_CHECKING:
   from .diagram import Diagram
@@ -38,6 +40,8 @@ class IndependentSegment(Segment, ShiftablePath, ScalablePath):
 
   def compile(self) -> tuple[list[complex],list[complex]]:
     """Compile the segment and return the lists of upper and lower points of the shape."""
+    self._upper_points = []
+    self._lower_points = []
     baseline_path = self.get_baseline_path()
 
     # Handle degenerate case: Point-like segment
@@ -65,7 +69,16 @@ class IndependentSegment(Segment, ShiftablePath, ScalablePath):
         # Let's just use a reasonable step.
         num_samples = max(2, int(self.diagram.resolution * (seg_len / baseline_path.length())))
 
-        for t in np.linspace(0, 1, num_samples):
+        sample_ts = set(np.linspace(0, 1, num_samples))
+        segment_path = None
+        for event_x in diagram_event_xs(self.diagram):
+            if start.real < event_x < end.real:
+                if segment_path is None:
+                    from svgpathtools import Path
+                    segment_path = Path(segment)
+                sample_ts.add(find_t_at_x(segment_path, event_x))
+
+        for t in sorted(sample_ts):
             point  = segment.point(t)
             normal = segment.normal(t)
 
