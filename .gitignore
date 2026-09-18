@@ -1,3 +1,10 @@
+.vscode/
+.history/
 __pycache__/
+.pytest_cache/
+*.egg-info/
+artifacts/
+build/
 ToDo.txt
 test_diagram.py
+*.svg

@@ -755,6 +755,41 @@ class Lineage(ScalablePath, ShiftablePath):
       offset_y:        float    = 0.0
     ):
     """Shift lineage to new Y position over X range."""
+    # Resolve overlaps with existing shifts
+    new_shifts = []
+    for event in self._shift_events:
+        # 1. No overlap
+        if event.to_x <= from_x or event.from_x >= to_x:
+            new_shifts.append(event)
+            continue
+
+        # 2. Overlap detected
+
+        # Part before new shift
+        if event.from_x < from_x:
+            # Create a truncated copy ending at from_x
+            # We keep the original target Y/lineage.
+            # This effectively speeds up the transition to finish earlier.
+            new_shifts.append(ShiftEvent(
+                from_x         = event.from_x,
+                to_x           = from_x,
+                to_y           = event.to_y,
+                target_lineage = event.target_lineage,
+                offset_y       = event.offset_y
+            ))
+
+        # Part after new shift
+        if event.to_x > to_x:
+            # Create a truncated copy starting at to_x
+            new_shifts.append(ShiftEvent(
+                from_x         = to_x,
+                to_x           = event.to_x,
+                to_y           = event.to_y,
+                target_lineage = event.target_lineage,
+                offset_y       = event.offset_y
+            ))
+
+    self._shift_events = new_shifts
     self._shift_events.append(ShiftEvent(from_x, to_x, to_y, target_lineage, offset_y))
 
   def scale_to(self, from_x:float, to_x:float, to_w:float):

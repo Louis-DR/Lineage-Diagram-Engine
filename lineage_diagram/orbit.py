@@ -34,6 +34,7 @@ class Orbit:
 
         # Computed points for members
         self._compiled_member_points: dict["Lineage",tuple[list[complex],list[complex]]] = {}
+        self._compiled_member_samples: dict["Lineage",list[tuple[float,complex,complex]]] = {}
 
     @property
     def memberships(self) -> list[OrbitMembership]:
@@ -104,7 +105,6 @@ class Orbit:
             [membership for membership in reversed_memberships if membership.index < 0],
             key=lambda membership: abs(membership.index)
         )
-
         # We need the main lineage width at X to know where the surface is.
         main_width = self.main_lineage.get_width_at(x)
         half_main  = main_width / 2
@@ -181,6 +181,7 @@ class Orbit:
         """Pre-calculate geometry."""
         # Initialize
         self._compiled_member_points = {m.lineage: ([], []) for m in self._memberships}
+        self._compiled_member_samples = {m.lineage: [] for m in self._memberships}
 
         diagram = self.main_lineage.diagram
         steps   = diagram.resolution
@@ -220,6 +221,7 @@ class Orbit:
 
                 self._compiled_member_points[membership.lineage][0].append(upper)
                 self._compiled_member_points[membership.lineage][1].append(lower)
+                self._compiled_member_samples[membership.lineage].append((x, upper, lower))
 
     def _get_member_geometry_at(self, x:float, lineage:"Lineage") -> tuple[complex,complex]:
         """Calculate the upper and lower points of a member at a specific X."""

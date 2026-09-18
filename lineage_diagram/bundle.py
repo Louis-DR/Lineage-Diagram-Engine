@@ -47,6 +47,7 @@ class Bundle(ShiftablePath):
 
     # Computed points for members
     self._compiled_member_points: dict["Lineage", tuple[list[complex], list[complex]]] = {}
+    self._compiled_member_samples: dict["Lineage", list[tuple[float, complex, complex]]] = {}
 
   @property
   def end_x(self) -> float:
@@ -180,6 +181,7 @@ class Bundle(ShiftablePath):
 
     # Initialize empty point lists for all members
     self._compiled_member_points = {membership.lineage: ([],[]) for membership in self._memberships}
+    self._compiled_member_samples = {membership.lineage: [] for membership in self._memberships}
 
     # Work step by step at the configured resolution
     for t in np.linspace(0, 1, self.diagram.resolution):
@@ -213,6 +215,7 @@ class Bundle(ShiftablePath):
         # ToDo reimplement back-filtering here
         self._compiled_member_points[membership.lineage][0].append(upper_point)
         self._compiled_member_points[membership.lineage][1].append(lower_point)
+        self._compiled_member_samples[membership.lineage].append((x, upper_point, lower_point))
 
         # Update bundle offset
         current_offset += member_width + member_gap

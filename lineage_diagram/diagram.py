@@ -42,10 +42,8 @@ class Diagram:
     """Register an orbit to the diagram."""
     self._orbits.append(orbit)
 
-  def generate(self, filepath:str="diagram.svg"):
-    """Generate the diagram to an SVG file."""
-    svg_lines = []
-
+  def compile(self) -> list["Lineage"]:
+    """Compile layout geometry and return lineages in drawing order."""
     # Compile all bundles: compute their baselines and internal stacking
     print("Step 1: Solving bundle constraints...")
     for bundle in self._bundles:
@@ -79,8 +77,7 @@ class Diagram:
 
     def visit(node):
         if node in temp_mark:
-            print(f"WARNING: Cyclic dependency detected involving {node}")
-            return
+            raise ValueError(f"Cyclic lineage dependency detected involving {node!r}")
         if node not in visited:
             temp_mark.add(node)
             for dependency in dependencies.get(node, []):
@@ -115,25 +112,30 @@ class Diagram:
             for orbit in orbits_by_main[lineage]:
                 orbit.solve_geometry()
 
-    # Draw
     # Sort by Z (ascending) to ensure correct layering.
     # Stable sort preserves topological/creation order for equal Z.
-    draw_order_lineages = sorted(solve_order_lineages, key=lambda lineage: lineage.z)
+    return sorted(solve_order_lineages, key=lambda lineage: lineage.z)
+
+  def to_svg(self) -> str:
+    """Compile the diagram and return the complete SVG document."""
+    draw_order_lineages = self.compile()
+    svg_lines = []
 
     for lineage in draw_order_lineages:
         svg_lines.append(lineage.draw())
 
-    # Write SVG
     print("Step 3: Rendering...")
-    # Open SVG tag
     svg_lines.insert(0, f'<svg width="{self.view_width}" height="{self.view_height}" viewBox="0 0 {self.view_width} {self.view_height}" xmlns="http://www.w3.org/2000/svg">')
-    # Close SVG tag
     svg_lines.append('</svg>')
+    return "\n".join(svg_lines)
 
-    # Write the SVG file
+  def generate(self, filepath:str="diagram.svg"):
+    """Generate the diagram to an SVG file."""
+    svg = self.to_svg()
+
     try:
-      with open(filepath, 'w') as file:
-        file.write("\n".join(svg_lines))
+      with open(filepath, 'w', encoding='utf-8') as file:
+        file.write(svg)
       print(f"Diagram successfully saved to {filepath}")
     except IOError as error:
       print(f"Error writing to file {filepath}: {error}")

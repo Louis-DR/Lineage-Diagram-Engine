@@ -7,7 +7,7 @@ name = "lineage_diagram"
 version = "0.1.0"
 description = "A library for generating lineage diagrams"
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 classifiers = [
     "Programming Language :: Python :: 3",
     "License :: OSI Approved :: MIT License",
@@ -18,6 +18,20 @@ dependencies = [
     "numpy",
 ]
 
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+]
+
+[tool.setuptools.packages.find]
+include = ["lineage_diagram*", "politics_lib*", "tools*"]
+exclude = ["artifacts*", "tests*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+xfail_strict = true
+
 [project.urls]
-"Homepage" = "https://github.com/yourusername/lineage-diagram-engine"
+"Homepage" = "https://github.com/PoliticVisualizer/lineage-diagram-engine"
 

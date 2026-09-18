@@ -1,0 +1,13 @@
+- Reorder in bundle
+- Add back the back-filtering
+- Resolution defines the number of points per unit length of lineage
+- Fix order of the lineages between split and merge (and bundle insertion, etc)
+- Dataclass for children spec of split
+- Chainable methods
+- Fix order of child of split ? cf example
+- Leave without transition staying at the same Y, also for create_at_lineage
+- Error handling (using lineage before or after it is active, overlapping incompatible transformations, etc)
+- Generate readme with API reference and user guide and pictures for examples
+- Remove the to_bundle and index arguments of the create_from_merge method
+- Rename shift_to and scale_to to just shift and scale
+- Fade-in and fade-out for the creation and termination of lineage with opacity gradient

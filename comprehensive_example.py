@@ -1440,6 +1440,40 @@ satellite_line_3.reorder(from_x=100, to_x=150, in_assembly=bundle, new_index=2)
 
 
 # -----------------------------------------------------------------------------
+# Trial
+# -----------------------------------------------------------------------------
+
+trial_line_1 = Lineage(
+    diagram = diagram,
+    color   = color_blue,
+    start_x = 0,
+    start_y = 1450,
+    start_w = 5,
+)
+
+trial_line_1.shift_to(from_x=100, to_x=200, to_y=1420)
+trial_line_2 = Lineage.create_from_lineage(
+    parent          = trial_line_1,
+    start_x         = 100,
+    transition_to_x = 200,
+    new_color       = color_red,
+    new_target_w    = 5,
+    new_target_y    = 1480,
+)
+
+trial_line_1.shift_to(from_x=300, to_x=400, to_y=1450)
+trial_line_2.merge_into(
+    target_lineage = trial_line_1,
+    merge_from_x   = 300,
+    end_x          = 400,
+    target_w       = 5,
+)
+
+
+
+
+
+# -----------------------------------------------------------------------------
 # Generate
 # -----------------------------------------------------------------------------
 diagram.generate("comprehensive_example.svg")
