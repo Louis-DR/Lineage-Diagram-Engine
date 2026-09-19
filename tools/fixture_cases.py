@@ -108,6 +108,31 @@ def split_merge() -> EngineFixture:
   )
 
 
+def overcommitted_split_merge_widths() -> EngineFixture:
+  diagram = _diagram()
+  parent = Lineage(diagram, BLUE, 0, 80, 20)
+  upper, lower = parent.split(60, 160, [
+    {"color": RED, "target_w": 15, "target_y": 50},
+    {"color": GREEN, "target_w": 15, "target_y": 110},
+  ])
+  merged = Lineage.create_from_merge(
+    diagram=diagram,
+    color=GOLD,
+    merge_from_x=200,
+    start_x=300,
+    start_y=80,
+    start_w=20,
+    parents=[upper, lower],
+  )
+  return EngineFixture(
+    "overcommitted-split-merge-widths",
+    "Split and merge packets tile a width-20 container despite width-15 requests.",
+    diagram,
+    {"parent": parent, "upper": upper, "lower": lower, "merged": merged},
+    (60, 160, 200, 300),
+  )
+
+
 def bundle_join_leave() -> EngineFixture:
   diagram = _diagram()
   bundle = Bundle(diagram, 0, 80, 5)
@@ -372,6 +397,7 @@ FIXTURE_BUILDERS: tuple[Callable[[], EngineFixture], ...] = (
   overlapping_shifts,
   branch_edges,
   split_merge,
+  overcommitted_split_merge_widths,
   bundle_join_leave,
   bundle_split,
   bundle_reorder,

@@ -76,6 +76,8 @@ class NumericTimeline:
       raise ValueError("Timeline transition end must not precede its start")
 
     start_value = self.value_at(from_x, BoundarySide.LEFT)
+    if any(transition.from_x == from_x == transition.to_x for transition in self.transitions):
+      start_value = self.value_at(from_x, BoundarySide.RIGHT)
     interrupted = next(
       (transition for transition in self.transitions if transition.from_x < to_x < transition.to_x),
       None,
@@ -324,6 +326,8 @@ class PositionTimeline:
       raise ValueError("Timeline transition end must not precede its start")
 
     start_y = self.value_at(from_x, BoundarySide.LEFT)
+    if any(step_x == from_x for step_x, _ in self.steps):
+      start_y = self.value_at(from_x, BoundarySide.RIGHT)
     if from_x == to_x:
       # A step ends any in-flight position transition. Later commands build a
       # new run from this explicit right-side state.

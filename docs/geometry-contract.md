@@ -56,7 +56,7 @@ The current diagnostic seam tolerance is `1e-3` diagram units.
 - Child and parent order is resolved before memberships are created.
 - All participants query the same event frame and assembly context.
 - Color is sampled at the event, not taken from an original constructor value.
-- The desired width-conservation policy remains an explicit design decision. Existing overlap behavior must not be silently adopted as the contract.
+- At a shared split or merge frame, participant widths exactly tile the parent or result width. Requested widths are proportional allocation weights; if every requested width is zero, participants receive equal widths. Requested target widths apply after branches have separated or converged.
 
 ## Regions
 

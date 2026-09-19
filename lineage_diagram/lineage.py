@@ -111,6 +111,30 @@ class Lineage(ScalablePath, ShiftablePath):
     )
 
   @staticmethod
+  def _calculate_packet_layout(
+      container_width: float,
+      container_center_y: float,
+      requested_widths: list[float],
+    ) -> tuple[list[float], list[float]]:
+    """Allocate participant widths that exactly tile one shared container."""
+    if not requested_widths:
+      return [], []
+
+    weights = [max(0.0, width) for width in requested_widths]
+    total_weight = sum(weights)
+    if total_weight == 0:
+      widths = [container_width / len(weights) for _ in weights]
+    else:
+      widths = [container_width * weight / total_weight for weight in weights]
+
+    current_edge = container_center_y - container_width / 2
+    centers = []
+    for width in widths:
+      centers.append(current_edge + width / 2)
+      current_edge += width
+    return widths, centers
+
+  @staticmethod
   def _calculate_merge_layout(
       parents:      list["Lineage"],
       merge_from_x: float,
@@ -119,57 +143,8 @@ class Lineage(ScalablePath, ShiftablePath):
       start_w:      float,
     ) -> tuple[list[float], list[float]]:
     """Calculate the target width and center Y for each parent at the merge point."""
-    # Sampling parent widths at the start of merge
-    parents_widths_at_from_x = [parent.get_width_at(merge_from_x) for parent in parents]
-    total_parents_width      = sum(parents_widths_at_from_x)
-
-    # Calculate proportional shares
-    if total_parents_width > 0:
-      proportions = [parent_width / total_parents_width for parent_width in parents_widths_at_from_x]
-    else:
-      proportions = [1.0 / len(parents) for _ in parents]
-
-    # Calculate widths of parents at merge point
-    proportional_widths = []
-    for width_at_from, proportion in zip(parents_widths_at_from_x, proportions):
-      proportional_share = start_w * proportion
-      # Clamp width logic:
-      # Lower bound: at least its own width or its share (prevent shrinking too much)
-      # Upper bound: at most the child width (prevent overflow)
-      lower_bound  = max(width_at_from, proportional_share)
-      target_width = min(lower_bound, start_w)
-      proportional_widths.append(target_width)
-
-    # Place the parents vertically at the merge point
-    proportional_shares = [start_w * proportion for proportion in proportions]
-    current_slot_y      = start_y - start_w / 2
-    parent_centers      = []
-
-    for share in proportional_shares:
-      center = current_slot_y + share / 2
-      parent_centers.append(center)
-      current_slot_y += share
-
-    # Child edge bounds
-    child_upper_edge = start_y + start_w / 2
-    child_lower_edge = start_y - start_w / 2
-
-    # Iterate over parents to adjust their centers
-    adjusted_centers = []
-    for parent_target_w, parent_center in zip(proportional_widths, parent_centers):
-      parent_upper_edge = parent_center + parent_target_w / 2
-      parent_lower_edge = parent_center - parent_target_w / 2
-
-      # Clamp to container
-      if parent_upper_edge > child_upper_edge:
-        correction     = parent_upper_edge - child_upper_edge
-        parent_center -= correction
-      elif parent_lower_edge < child_lower_edge:
-        correction     = child_lower_edge - parent_lower_edge
-        parent_center += correction
-      adjusted_centers.append(parent_center)
-
-    return proportional_widths, adjusted_centers
+    requested_widths = [parent.get_width_at(merge_from_x) for parent in parents]
+    return Lineage._calculate_packet_layout(start_w, start_y, requested_widths)
 
   @staticmethod
   def _calculate_split_layout(
@@ -178,55 +153,7 @@ class Lineage(ScalablePath, ShiftablePath):
       children_target_widths: list[float],
     ) -> tuple[list[float],list[float]]:
     """Calculate the start width and center Y for each child at the split point."""
-    total_children_target_width = sum(children_target_widths)
-
-    # Calculate proportional shares based on target widths
-    if total_children_target_width > 0:
-      proportions = [width / total_children_target_width for width in children_target_widths]
-    else:
-      proportions = [1.0 / len(children_target_widths) for _ in children_target_widths]
-
-    # Calculate start widths of children at split point
-    children_start_widths = []
-    for target_width, proportion in zip(children_target_widths, proportions):
-      proportional_share = parent_w * proportion
-      # Clamp width logic:
-      # Lower bound: at least its own target width or its share (prevent shrinking too much)
-      # Upper bound: at most the parent width (prevent overflow)
-      lower_bound  = max(target_width, proportional_share)
-      start_width  = min(lower_bound, parent_w)
-      children_start_widths.append(start_width)
-
-    # Place the children vertically at the split point
-    proportional_shares    = [parent_w * proportion for proportion in proportions]
-    current_slot_y         = parent_center_y - parent_w / 2
-    children_start_centers = []
-
-    for share in proportional_shares:
-      center = current_slot_y + share / 2
-      children_start_centers.append(center)
-      current_slot_y += share
-
-    # Parent edge bounds
-    parent_upper_edge = parent_center_y + parent_w / 2
-    parent_lower_edge = parent_center_y - parent_w / 2
-
-    # Iterate over children to adjust their centers
-    adjusted_centers = []
-    for child_start_w, child_center in zip(children_start_widths, children_start_centers):
-      child_upper_edge = child_center + child_start_w / 2
-      child_lower_edge = child_center - child_start_w / 2
-
-      # Clamp to container
-      if child_upper_edge > parent_upper_edge:
-        correction    = child_upper_edge - parent_upper_edge
-        child_center -= correction
-      elif child_lower_edge < parent_lower_edge:
-        correction    = parent_lower_edge - child_lower_edge
-        child_center += correction
-      adjusted_centers.append(child_center)
-
-    return children_start_widths, adjusted_centers
+    return Lineage._calculate_packet_layout(parent_w, parent_center_y, children_target_widths)
 
   @classmethod
   def create_from_merge(

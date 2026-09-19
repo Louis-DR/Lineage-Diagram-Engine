@@ -7,7 +7,7 @@ from lineage_diagram.diagram import Diagram
 from lineage_diagram.lineage import Lineage
 from lineage_diagram.orbit import Orbit
 from lineage_diagram.paths import ScaleEvent
-from lineage_diagram.timeline import BoundarySide, ColorTimeline, NumericTimeline
+from lineage_diagram.timeline import BoundarySide, ColorTimeline, NumericTimeline, PositionTimeline
 from tools.fixture_cases import (
   bundle_merge_replacement,
   bundle_reorder,
@@ -44,6 +44,30 @@ def test_zero_duration_width_has_explicit_boundary_sides():
 
   assert lineage.state_at(80, BoundarySide.LEFT).width == 10
   assert lineage.state_at(80, BoundarySide.RIGHT).width == 24
+
+
+def test_transition_after_a_zero_duration_step_starts_from_the_step_state():
+  stepped_width = NumericTimeline(10, [
+    ScaleEvent(80, 80, 24),
+    ScaleEvent(80, 120, 30),
+  ], "to_w")
+
+  assert stepped_width.value_at(80, BoundarySide.RIGHT) == 24
+  assert stepped_width.value_at(100) > 24
+
+  class Shift:
+    def __init__(self, from_x, to_x, to_y):
+      self.from_x = from_x
+      self.to_x = to_x
+      self.to_y = to_y
+      self.offset_y = 0.0
+
+  position = PositionTimeline(0, 10, [
+    Shift(80, 80, 24),
+    Shift(80, 120, 30),
+  ])
+  assert position.value_at(80, BoundarySide.RIGHT) == 24
+  assert position.value_at(100) > 24
 
 
 def test_overlapping_scale_preserves_prefix_and_resumes_interrupted_target():
