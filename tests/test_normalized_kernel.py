@@ -8,6 +8,7 @@ from lineage_diagram.lineage import Lineage
 from lineage_diagram.orbit import Orbit
 from lineage_diagram.paths import ScaleEvent
 from lineage_diagram.timeline import BoundarySide, ColorTimeline, NumericTimeline, PositionTimeline
+from lineage_diagram.utils import smootherstep
 from tools.fixture_cases import (
   bundle_merge_replacement,
   bundle_reorder,
@@ -15,6 +16,8 @@ from tools.fixture_cases import (
   orbit_merge_split,
   overlapping_shifts,
   simultaneous_bundle_join_leave,
+  staggered_bundle_joins,
+  staggered_orbit_joins,
 )
 
 
@@ -246,6 +249,58 @@ def test_simultaneous_bundle_join_leave_interpolates_persistent_member_without_j
     leaving_segment.get_baseline_path().point(0).imag,
     abs=1e-4,
   )
+
+
+@pytest.mark.parametrize(
+  ("builder", "layout"),
+  [
+    (staggered_bundle_joins, lambda assembly, x: assembly._layout_at(x)[1]),
+    (staggered_orbit_joins, lambda assembly, x: assembly._layout_at(x)[1]),
+  ],
+  ids=("bundle", "orbit"),
+)
+def test_staggered_join_components_keep_persistent_members_continuous(builder, layout):
+  fixture = builder()
+  assembly = fixture.diagram._bundles[0] if fixture.diagram._bundles else fixture.diagram._orbits[0]
+  resident = fixture.lineages["resident"]
+
+  for boundary in (30, 50):
+    before = layout(assembly, boundary - 1e-5)[resident]
+    after = layout(assembly, boundary + 1e-5)[resident]
+    assert after == pytest.approx(before, abs=1e-4)
+
+  # The first start and final end define one immutable overlap component.
+  before_component = layout(assembly, 9.999)[resident]
+  after_component = layout(assembly, 70.001)[resident]
+  expected = before_component + (after_component - before_component) * smootherstep((51 - 10) / (70 - 10))
+  assert layout(assembly, 51)[resident] == pytest.approx(expected, abs=1e-4)
+
+
+def test_overlapping_assembly_affiliations_transfer_to_the_newest_join():
+  diagram = Diagram(100, 100)
+  bundle = Bundle(diagram, 0, 40, 2)
+  host = Lineage(diagram, "black", 0, 60, 10)
+  orbit = Orbit(diagram, host, 2)
+  member = Lineage(diagram, "red", 0, 20, 10)
+
+  member.join(0, 10, bundle, index=0)
+  # Model a political interval that closes after the next affiliation starts.
+  member.leave(34, 44, bundle, 20)
+  member.join(20, 30, orbit, index=1)
+  member.leave(60, 70, orbit, 20)
+  member.terminate_at(80)
+  member.compile_segments()
+
+  dependent_segments = [
+    segment for segment in member._computed_segments
+    if hasattr(segment, "bundle")
+  ]
+  assert [(segment.bundle, segment.start_x, segment.end_x) for segment in dependent_segments] == [
+    (bundle, 10, 20),
+    (orbit, 30, 60),
+  ]
+  assert member not in [membership.lineage for membership in bundle.get_memberships_at(30)]
+  assert member.state_at(50).assembly_id == orbit.id
 
 
 def test_orbit_merge_and_split_keep_lower_side_indices_and_newest_inner_tie_order():

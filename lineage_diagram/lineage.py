@@ -736,6 +736,18 @@ class Lineage(ScalablePath, ShiftablePath):
   def join(self, from_x:float, to_x:float, to_assembly:"Bundle | Orbit", index:int=-1):
     """Join assembly over a transition X range."""
     to_assembly.validate_member_index(index, allow_append=True)
+    for assembly in (*self.diagram._bundles, *self.diagram._orbits):
+      if assembly is to_assembly:
+        continue
+      active_membership = next((
+        membership for membership in assembly.memberships
+        if membership.lineage is self and membership.start_x <= from_x < membership.end_x
+      ), None)
+      if active_membership is not None:
+        # A lineage has one authoritative assembly state. Keep the outgoing
+        # slot only as a transition reservation while entering the new one.
+        self.leave(from_x, to_x, assembly)
+        break
     self.membership_events.append(MembershipEvent(from_x, to_x, MembershipEventType.JOIN, assembly=to_assembly))
     # Inform the assembly of the new member.
     # The lineage starts entering at from_x, and is fully inside at to_x.
@@ -1028,7 +1040,54 @@ class Lineage(ScalablePath, ShiftablePath):
           if not next_event: break
       else:
         # Dependent lineage (inside a bundle)
+        if next_event and next_event.type == MembershipEventType.JOIN:
+          if next_event.assembly is current_bundle:
+            # A repeated join into the current assembly does not change the
+            # authoritative geometry state.
+            self._computed_segments.append(DependentSegment(
+              diagram = self.diagram,
+              bundle  = current_bundle,
+              lineage = self,
+              start_x = current_x,
+              end_x   = min(next_event.to_x, drawing_max_x),
+            ))
+            current_x = next_event.to_x
+            event_index += 1
+            continue
+
+          # Political affiliations can overlap while a member transfers from
+          # one assembly to another. The newest join becomes authoritative;
+          # a later leave for the old assembly is consumed below.
+          self._computed_segments.append(DependentSegment(
+            diagram = self.diagram,
+            bundle  = current_bundle,
+            lineage = self,
+            start_x = current_x,
+            end_x   = min(next_event.from_x, drawing_max_x),
+          ))
+          start_center = current_bundle.get_center_point_of_member_at(next_event.from_x - 1e-5, self)
+          end_center = next_event.assembly.get_center_point_of_member_at(next_event.to_x, self)
+          self._computed_segments.append(IndependentSegment(
+            diagram      = self.diagram,
+            start_x      = next_event.from_x,
+            start_y      = start_center.imag,
+            start_w      = self.start_w,
+            end_x        = min(next_event.to_x, drawing_max_x),
+            shift_events = [ShiftEvent(next_event.from_x, next_event.to_x, end_center.imag)],
+            scale_events = self._scale_events,
+          ))
+          current_x = next_event.to_x
+          current_bundle = next_event.assembly
+          event_index += 1
+          continue
+
         if next_event and next_event.type == MembershipEventType.LEAVE:
+          if next_event.assembly is not current_bundle:
+            # The lineage already transferred to another assembly before its
+            # historical affiliation interval formally closed.
+            event_index += 1
+            continue
+
           # Check for Reorder (Leave + Join)
           next_next_event = self.membership_events[event_index+1] if event_index + 1 < len(self.membership_events) else None
 

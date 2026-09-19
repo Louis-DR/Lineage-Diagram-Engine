@@ -7,7 +7,7 @@ from typing      import TYPE_CHECKING
 from .paths      import ShiftablePath, ShiftEvent
 from .utils      import find_t_at_x, smootherstep
 from .sampling   import diagram_event_xs
-from .topology   import AssemblyReservation, ReorderTransition
+from .topology   import AssemblyReservation, ReorderTransition, reservation_overlap_component
 
 if TYPE_CHECKING:
   from .diagram import Diagram
@@ -250,13 +250,10 @@ class Bundle(ShiftablePath):
   def _layout_at(self, x: float):
     memberships = self._get_layout_memberships_at(x)
     offsets, widths = self._calculate_offsets(memberships, x)
-    active_reservations = [
-      reservation for reservation in self._reservations
-      if reservation.start_x < x < reservation.end_x
-    ]
-    if active_reservations:
-      window_start = min(reservation.start_x for reservation in active_reservations)
-      window_end = max(reservation.end_x for reservation in active_reservations)
+    component = reservation_overlap_component(self._reservations, x)
+    if component:
+      window_start = min(reservation.start_x for reservation in component)
+      window_end = max(reservation.end_x for reservation in component)
       before_memberships = self.get_memberships_at(window_start - 1e-7)
       after_memberships = self.get_memberships_at(window_end + 1e-7)
       before_offsets, _ = self._calculate_offsets(before_memberships, x)

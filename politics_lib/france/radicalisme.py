@@ -124,6 +124,6 @@ parti_radical_de_gauche_2019 = PoliticalParty(
     }
   }
 )
-parti_radical_de_gauche_2019.join(Date(2023,2,1), la_convention_federation)
+parti_radical_de_gauche_2019.join(Date(2023,3,14), la_convention_federation)
 
 #endregion

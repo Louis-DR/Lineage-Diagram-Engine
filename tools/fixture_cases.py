@@ -219,6 +219,41 @@ def simultaneous_bundle_join_leave() -> EngineFixture:
   )
 
 
+def staggered_bundle_joins() -> EngineFixture:
+  diagram = _diagram()
+  bundle = Bundle(diagram, 0, 80, 3)
+  resident = Lineage.create_in_assembly(diagram, GOLD, 0, 10, bundle)
+  first = Lineage(diagram, GREEN, 0, 80, 10)
+  second = Lineage(diagram, BLUE, 0, 100, 10)
+  first.join(10, 50, bundle, index=0)
+  second.join(30, 70, bundle, index=0)
+  return EngineFixture(
+    "staggered-bundle-joins",
+    "Overlapping joins retain one interpolation window through inner boundaries.",
+    diagram,
+    {"resident": resident, "first": first, "second": second},
+    (10, 30, 50, 70),
+  )
+
+
+def staggered_orbit_joins() -> EngineFixture:
+  diagram = _diagram()
+  main = Lineage(diagram, "black", 0, 80, 10)
+  orbit = Orbit(diagram, main, 3)
+  resident = Lineage.create_in_assembly(diagram, GOLD, 0, 10, orbit, 1)
+  first = Lineage(diagram, GREEN, 0, 80, 10)
+  second = Lineage(diagram, BLUE, 0, 100, 10)
+  first.join(10, 50, orbit, index=1)
+  second.join(30, 70, orbit, index=1)
+  return EngineFixture(
+    "staggered-orbit-joins",
+    "Overlapping orbit joins retain one interpolation window through inner boundaries.",
+    diagram,
+    {"main": main, "resident": resident, "first": first, "second": second},
+    (10, 30, 50, 70),
+  )
+
+
 def orbit_merge_split() -> EngineFixture:
   diagram = _diagram()
   main = Lineage(diagram, "white", 0, 80, 20)
@@ -472,6 +507,8 @@ FIXTURE_BUILDERS: tuple[Callable[[], EngineFixture], ...] = (
   bundle_merge_replacement,
   continuing_merge_boundary,
   simultaneous_bundle_join_leave,
+  staggered_bundle_joins,
+  staggered_orbit_joins,
   orbit_merge_split,
   tight_independent_normal_offset,
   safe_independent_normal_offset,

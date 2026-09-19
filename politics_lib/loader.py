@@ -274,9 +274,11 @@ def load_france() -> PoliticalSystem:
       topology.append((target.creation_date, declaration.order, ("secede", source, target, spec)))
     host = relationships.get("inside_entity")
     if host is not None:
-      topology.append((target.creation_date, declaration.order, ("join", target, _resolve(host, builder.aliases, entities))))
+      topology.append((target.creation_date, declaration.order, (
+        "inside", target, _resolve(host, builder.aliases, entities), target.creation_date,
+      )))
     for member in _resolve(relationships.get("initial_members", []), builder.aliases, entities):
-      topology.append((target.creation_date, declaration.order, ("join", member, target)))
+      topology.append((target.creation_date, declaration.order, ("join", member, target, target.creation_date)))
 
   for call in builder.calls:
     if call.owner is not None and call.method in TOPOLOGY_METHODS:
@@ -300,8 +302,11 @@ def load_france() -> PoliticalSystem:
     elif kind == "secede":
       spec = payload[0]
       source.secede_into(target.creation_date, target, float(spec.get("ratio", 0.0)), spec.get("source_new_position"))
+    elif kind == "inside":
+      source.inside_entity = target
+      source.join(payload[0], target)
     else:
-      source.join(target.creation_date, target)
+      source.join(payload[0], target)
 
   _close_memberships(system)
   return system

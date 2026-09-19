@@ -1023,6 +1023,7 @@ def main():
                                 lineage_for_leave.leave(leave_from_x, leave_to_x, orbit, target_y)
 
   diagram.generate("political_diagram.svg")
+  return diagram
 
 if __name__ == "__main__":
   main()

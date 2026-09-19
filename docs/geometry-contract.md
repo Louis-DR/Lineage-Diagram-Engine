@@ -33,6 +33,8 @@ Normal offsets should satisfy `abs(offset) / curvature_radius <= 0.80`. Compilat
 - Zero-duration events are explicit state changes and may not divide by zero.
 - Overlapping transitions of the same property must be normalized or rejected before geometry compilation.
 - A public state query and rendered geometry must use the same interpolation function.
+- A connected chain of overlapping assembly reservations uses one fixed interpolation window from its earliest start to its latest end. Internal reservation boundaries may not reset persistent member offsets.
+- Joining a new assembly while another is active creates a paired transfer: the prior stable slot ends at the new join start and persists only as a transition reservation.
 
 ## Segment Continuity
 
