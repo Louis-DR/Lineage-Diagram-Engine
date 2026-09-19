@@ -1,4 +1,5 @@
 import numpy        as np
+import math
 
 from dataclasses import dataclass
 from typing      import TYPE_CHECKING
@@ -153,13 +154,18 @@ class Bundle(ShiftablePath):
 
   def _get_layout_memberships_at(self, x: float):
     memberships = list(self.get_memberships_at(x))
-    for reservation in self._reservations:
+    reservations = [
+      reservation for reservation in self._reservations
       if (
         reservation.start_x < x < reservation.end_x
         and not any(membership.lineage is reservation.lineage for membership in memberships)
-      ):
-        index = len(memberships) if reservation.index == -1 else max(0, min(reservation.index, len(memberships)))
-        memberships.insert(index, reservation)
+      )
+    ]
+    # Match add_member() semantics: lower slots are inserted first, while
+    # equal slots retain creation order and therefore stack newest first.
+    for reservation in sorted(reservations, key=lambda item: item.index if item.index != -1 else math.inf):
+      index = len(memberships) if reservation.index == -1 else max(0, min(reservation.index, len(memberships)))
+      memberships.insert(index, reservation)
     return memberships
 
   def _get_factor(self, membership:BundleMembership, x:float) -> float:
@@ -234,6 +240,21 @@ class Bundle(ShiftablePath):
   def _layout_at(self, x: float):
     memberships = self._get_layout_memberships_at(x)
     offsets, widths = self._calculate_offsets(memberships, x)
+    active_reservations = [
+      reservation for reservation in self._reservations
+      if reservation.start_x < x < reservation.end_x
+    ]
+    if active_reservations:
+      window_start = min(reservation.start_x for reservation in active_reservations)
+      window_end = max(reservation.end_x for reservation in active_reservations)
+      before_memberships = self.get_memberships_at(window_start - 1e-7)
+      after_memberships = self.get_memberships_at(window_end + 1e-7)
+      before_offsets, _ = self._calculate_offsets(before_memberships, x)
+      after_offsets, _ = self._calculate_offsets(after_memberships, x)
+      factor = smootherstep((x - window_start) / (window_end - window_start))
+      for lineage in set(before_offsets) & set(after_offsets):
+        offsets[lineage] = before_offsets[lineage] + (after_offsets[lineage] - before_offsets[lineage]) * factor
+
     active_event = next((event for event in self._reorder_events if event.from_x < x < event.to_x), None)
     if active_event is None:
       return memberships, offsets, widths

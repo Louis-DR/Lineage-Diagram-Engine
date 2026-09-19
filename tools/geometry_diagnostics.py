@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Any
 
 from lineage_diagram.segments import IndependentSegment
+from lineage_diagram.timeline import BoundarySide, NumericTimeline
 from tools.fixture_cases import EngineFixture, build_all_fixtures
 
 
@@ -160,7 +161,19 @@ def diagnose_fixture(
         for point_index, (top, bottom) in enumerate(zip(upper, lower)):
           center = (top + bottom) / 2
           actual_width = abs(top - bottom)
-          expected_width = lineage.get_width_at(center.real)
+          next_center = (
+            (upper[point_index + 1] + lower[point_index + 1]) / 2
+            if point_index + 1 < len(upper)
+            else None
+          )
+          # An explicit zero-duration transform emits adjacent left/right
+          # samples at one x. The first sample is the left-side state.
+          side = (
+            BoundarySide.LEFT
+            if next_center is not None and abs(next_center.real - center.real) <= 1e-6
+            else BoundarySide.RIGHT
+          )
+          expected_width = NumericTimeline(lineage.start_w, lineage._scale_events, "to_w").value_at(center.real, side)
           if not math.isfinite(actual_width):
             violations.append({
               "kind": "non-finite-rendered-width",

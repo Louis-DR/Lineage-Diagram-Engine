@@ -186,6 +186,19 @@ class Orbit:
     def _layout_at(self, x:float):
         memberships = self._get_layout_memberships_at(x)
         offsets = self._calculate_layout(memberships, x)
+        active_reservations = [
+            reservation for reservation in self._reservations
+            if reservation.start_x < x < reservation.end_x
+        ]
+        if active_reservations:
+            window_start = min(reservation.start_x for reservation in active_reservations)
+            window_end = max(reservation.end_x for reservation in active_reservations)
+            before_offsets = self._calculate_layout(self.get_memberships_at(window_start - 1e-7), x)
+            after_offsets = self._calculate_layout(self.get_memberships_at(window_end + 1e-7), x)
+            factor = smootherstep((x - window_start) / (window_end - window_start))
+            for lineage in set(before_offsets) & set(after_offsets):
+                offsets[lineage] = before_offsets[lineage] + (after_offsets[lineage] - before_offsets[lineage]) * factor
+
         active_event = next((event for event in self._reorder_events if event.from_x < x < event.to_x), None)
         if active_event is None:
             return memberships, offsets

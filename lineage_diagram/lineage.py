@@ -243,11 +243,13 @@ class Lineage(ScalablePath, ShiftablePath):
     ) -> "Lineage":
     """Create a lineage resulting from the merge of parents."""
     if in_assembly:
-      fade_in_duration = start_x - merge_from_x
-      child            = cls.create_in_assembly(diagram, color, start_x, start_w, in_assembly, index, fade_in_duration, z=z)
-      # If in assembly, start_y is ignored/dynamic. We use 0 as base for relative calculations if needed,
-      # but really we should rely on the child's dynamic position.
-      # For the layout calculation below, we assume centered around 0 (relative) and will use target_lineage offset.
+      # The child exists at start_x. Before then, its transition reservation
+      # participates in the parent assembly without creating an impossible
+      # stable membership that predates the lineage lifecycle.
+      child = cls(diagram, color, start_x, 0, start_w, z=z)
+      in_assembly.add_member(child, start_x, diagram.view_width, index=index)
+      in_assembly.reserve_member(child, merge_from_x, start_x, fade_in=True, index=index)
+      child._initial_bundle = in_assembly
       layout_base_y = 0
     else:
       child         = cls(diagram, color, start_x, start_y, start_w, z=z)
@@ -488,13 +490,17 @@ class Lineage(ScalablePath, ShiftablePath):
     if parent_bundle:
       # We manually update the membership to fade out the parent from the bundle
       # This ensures the space is reclaimed smoothly while the children fade in.
-      parent_index = -1
-      for i, membership in enumerate(parent_bundle.memberships):
+      active_memberships = parent_bundle.get_memberships_at(start_x)
+      active_slot = next(
+        (index for index, membership in enumerate(active_memberships) if membership.lineage is self),
+        -1,
+      )
+      for membership in parent_bundle.memberships:
         if membership.lineage == self and membership.start_x <= start_x <= membership.end_x:
           membership.end_x             = start_x
           membership.fade_out_duration = 0.0
-          parent_bundle.reserve_member(self, start_x, split_to_x, fade_in=False, index=i)
-          parent_index = i
+          reservation_index = membership.index if hasattr(membership, "index") else active_slot
+          parent_bundle.reserve_member(self, start_x, split_to_x, fade_in=False, index=reservation_index)
           break
 
       # Visual termination: stop drawing at start_x (clean cut)
@@ -1079,7 +1085,7 @@ class Lineage(ScalablePath, ShiftablePath):
 
              # 2. Transition Segment
              # Start point: Center in OLD bundle at from_x
-             start_center = current_bundle.get_center_point_of_member_at(next_event.from_x + 1e-3, self)
+             start_center = current_bundle.get_center_point_of_member_at(next_event.from_x - 1e-5, self)
 
              # End point: Center in NEW bundle at to_x
              new_bundle = next_next_event.assembly
@@ -1132,7 +1138,7 @@ class Lineage(ScalablePath, ShiftablePath):
              )
              self._computed_segments.append(segment)
              # Get the center point of the lineage inside the bundle when it leaves
-             center_in_bundle = current_bundle.get_center_point_of_member_at(next_event.from_x + 1e-3, self)
+             center_in_bundle = current_bundle.get_center_point_of_member_at(next_event.from_x - 1e-5, self)
              # Create a new independent segment that starts at the bundle position and shifts to the target Y
              # Resolve dynamic target if needed
              resolved_target_y = next_event.target_y

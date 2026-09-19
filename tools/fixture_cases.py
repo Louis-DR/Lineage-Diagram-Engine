@@ -143,6 +143,78 @@ def bundle_split() -> EngineFixture:
   )
 
 
+def bundle_merge_replacement() -> EngineFixture:
+  diagram = _diagram()
+  bundle = Bundle(diagram, 0, 80, 3)
+  blue = Lineage.create_in_assembly(diagram, BLUE, 0, 10, bundle)
+  red = Lineage.create_in_assembly(diagram, RED, 0, 10, bundle)
+  green = Lineage.create_in_assembly(diagram, GREEN, 0, 10, bundle)
+  yellow = Lineage.create_in_assembly(diagram, GOLD, 0, 10, bundle)
+  merged = Lineage.create_in_assembly_from_merge(
+    diagram, "white", 100, 150, 20, [blue, red], bundle, index=0,
+  )
+  return EngineFixture(
+    "bundle-merge-replacement",
+    "Two bundle members merge without reordering unaffected neighbors.",
+    diagram,
+    {"blue": blue, "red": red, "green": green, "yellow": yellow, "merged": merged},
+    (100, 150),
+  )
+
+
+def continuing_merge_boundary() -> EngineFixture:
+  diagram = _diagram()
+  source = Lineage(diagram, "white", 0, 80, 10)
+  incoming = Lineage(diagram, GREEN, 0, 94, 10)
+  incoming.merge_into(source, 100, 150, 20)
+  return EngineFixture(
+    "continuing-merge-boundary",
+    "A continuing merge ends with an exact right-side center step.",
+    diagram,
+    {"source": source, "incoming": incoming},
+    (100, 150),
+  )
+
+
+def simultaneous_bundle_join_leave() -> EngineFixture:
+  diagram = _diagram()
+  bundle = Bundle(diagram, 0, 80, 3)
+  yellow = Lineage.create_in_assembly(diagram, GOLD, 0, 10, bundle)
+  green = Lineage.create_in_assembly(diagram, GREEN, 0, 10, bundle)
+  blue = Lineage(diagram, BLUE, 0, 35, 10)
+  green.leave(100, 150, bundle, 30)
+  blue.join(100, 150, bundle, index=0)
+  return EngineFixture(
+    "simultaneous-bundle-join-leave",
+    "An incoming member and outgoing member share one bundle transition window.",
+    diagram,
+    {"yellow": yellow, "green": green, "blue": blue},
+    (100, 150),
+  )
+
+
+def orbit_merge_split() -> EngineFixture:
+  diagram = _diagram()
+  main = Lineage(diagram, "white", 0, 80, 20)
+  orbit = Orbit(diagram, main, 3)
+  blue = Lineage.create_in_assembly(diagram, BLUE, 0, 5, orbit, -1)
+  red = Lineage.create_in_assembly(diagram, RED, 0, 5, orbit, -1)
+  merged = Lineage.create_in_assembly_from_merge(
+    diagram, "gray", 100, 150, 10, [blue, red], orbit, index=-1,
+  )
+  split_blue, split_red = merged.split(200, 250, [
+    {"color": BLUE, "target_w": 5, "in_assembly": orbit, "index": -1},
+    {"color": RED, "target_w": 5, "in_assembly": orbit, "index": -1},
+  ])
+  return EngineFixture(
+    "orbit-merge-split",
+    "Equal-index lower orbit members merge and split without crossing sides.",
+    diagram,
+    {"main": main, "blue": blue, "red": red, "merged": merged, "split-blue": split_blue, "split-red": split_red},
+    (100, 150, 200, 250),
+  )
+
+
 def bundle_reorder() -> EngineFixture:
   diagram = _diagram()
   bundle = Bundle(diagram, 0, 80, 5)
@@ -272,6 +344,10 @@ FIXTURE_BUILDERS: tuple[Callable[[], EngineFixture], ...] = (
   moving_orbit,
   assembled_termination,
   color_transition,
+  bundle_merge_replacement,
+  continuing_merge_boundary,
+  simultaneous_bundle_join_leave,
+  orbit_merge_split,
 )
 
 

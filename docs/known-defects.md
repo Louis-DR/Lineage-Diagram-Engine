@@ -32,4 +32,4 @@ ENG-001 through ENG-007, ENG-012, and ENG-013 are covered by ordinary passing re
 
 ## Baseline Measurements
 
-The 13 focused fixtures currently report zero structural violations under the default diagnostics. Optional self-intersection diagnostics and the unresolved curvature and split/merge width policies remain separate work.
+The 17 focused fixtures currently report zero structural violations under the default diagnostics. Optional self-intersection diagnostics and the unresolved curvature and split/merge width policies remain separate work.

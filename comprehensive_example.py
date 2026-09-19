@@ -18,8 +18,8 @@ color_green       = 'darkseagreen'
 color_dark_green  = 'seagreen'
 color_yellow      = 'goldenrod'
 color_dark_yellow = 'darkgoldenrod'
-color_white       = 'white'
-color_gray        = 'gray'
+color_white       = 'lightgrey'
+color_gray        = 'dimgrey'
 color_black       = 'black'
 
 
@@ -1307,16 +1307,16 @@ satellite_line_1, satellite_line_2 = satellite_merged_line_1.split(
     split_to_x = 1800,
     children_specs = [
         {
-            "color":       color_blue,
+            "color":       color_red,
             "target_w":    5,
             "in_assembly": orbit,
             "index":       -1,
         },
         {
-            "color":       color_red,
+            "color":       color_blue,
             "target_w":    5,
             "in_assembly": orbit,
-            "index":       -1,
+            "index":       -2,
         },
     ]
 )
@@ -1335,7 +1335,7 @@ satellite_line_3, satellite_line_4 = satellite_merged_line_2.split(
             "color":       color_yellow,
             "target_w":    5,
             "in_assembly": orbit,
-            "index":       +1,
+            "index":       +2,
         },
     ]
 )

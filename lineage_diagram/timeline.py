@@ -325,6 +325,15 @@ class PositionTimeline:
 
     start_y = self.value_at(from_x, BoundarySide.LEFT)
     if from_x == to_x:
+      # A step ends any in-flight position transition. Later commands build a
+      # new run from this explicit right-side state.
+      updated = []
+      for piece in self.pieces:
+        if piece.to_x <= from_x:
+          updated.append(piece)
+        elif piece.from_x < from_x:
+          updated.append(piece.crop_to_x(piece.from_x, from_x))
+      self.pieces = updated
       self.steps = [(x, value) for x, value in self.steps if x != from_x]
       self.steps.append((from_x, target_y))
       self.steps.sort()
@@ -381,9 +390,21 @@ class PositionTimeline:
   def path_until(self, end_x: float) -> svg.Path:
     path = svg.Path()
     current = complex(self.start_x, self.start_y)
+    steps = iter(sorted(self.steps))
+    pending_step = next(steps, None)
+
     for piece in self.pieces:
       if piece.from_x > end_x:
         break
+      while pending_step is not None and pending_step[0] <= piece.from_x:
+        step_x, step_y = pending_step
+        if current.real < step_x:
+          path.append(svg.Line(current, complex(step_x, current.imag)))
+        next_point = complex(step_x, step_y)
+        if current != next_point:
+          path.append(svg.Line(complex(step_x, current.imag), next_point))
+        current = next_point
+        pending_step = next(steps, None)
       if current.real < piece.from_x:
         path.append(svg.Line(current, complex(piece.from_x, current.imag)))
       segment = piece.segment
@@ -393,6 +414,16 @@ class PositionTimeline:
       current = segment.end
       if current.real >= end_x:
         return path
+
+    while pending_step is not None and pending_step[0] <= end_x:
+      step_x, step_y = pending_step
+      if current.real < step_x:
+        path.append(svg.Line(current, complex(step_x, current.imag)))
+      next_point = complex(step_x, step_y)
+      if current != next_point:
+        path.append(svg.Line(complex(step_x, current.imag), next_point))
+      current = next_point
+      pending_step = next(steps, None)
     if current.real < end_x:
       path.append(svg.Line(current, complex(end_x, self.value_at(end_x))))
     return path
