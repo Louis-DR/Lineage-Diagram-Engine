@@ -41,6 +41,11 @@ class PoliticalSystem:
     if self._initialized: return
     self._initialized = True
 
+    self.reset()
+
+  def reset(self):
+    """Clear loaded data so an explicit loader can rebuild deterministically."""
+
     self.political_regimes      = {}
     self.political_parties      = {}
     self.political_federations  = {}
@@ -50,6 +55,9 @@ class PoliticalSystem:
     self.legislatures           = {}
     self.senate_compositions    = {}
     self.european_delegations   = {}
+    self.entities_by_id         = {}
+    self.aliases                = {}
+    self.loader_warnings        = []
 
   def set_political_regime(
     self,
@@ -277,6 +285,17 @@ class PoliticalParty:
   def dissolve(self, at_date:Date):
     # Dissolution marks the end date of the party's existence.
     self.dissolution_date = at_date
+    for membership in self.satellite_memberships:
+      if membership.get("to") is None:
+        self._leave_satellite(at_date, membership["host"])
+    for membership in self.federation_memberships:
+      if membership.get("to") is None:
+        membership["to"] = at_date
+        membership["federation"]._remove_member(at_date, self)
+    for membership in self.alliance_memberships:
+      if membership.get("to") is None:
+        membership["to"] = at_date
+        membership["alliance"]._remove_member(at_date, self)
     self.lineage_events.append({
       "type": "dissolve",
       "date": at_date,
@@ -1179,8 +1198,8 @@ class PoliticalFederation:
         current_pos = target
       elif at_date > start_date:
         # Interpolate
-        total_days = (end_date.to_datetime() - start_date.to_datetime()).days
-        elapsed_days = (at_date.to_datetime() - start_date.to_datetime()).days
+        total_days = (end_date._to_datetime_date() - start_date._to_datetime_date()).days
+        elapsed_days = (at_date._to_datetime_date() - start_date._to_datetime_date()).days
         if total_days > 0:
           ratio = elapsed_days / total_days
           # Simple linear interpolation for value (visuals use smootherstep)

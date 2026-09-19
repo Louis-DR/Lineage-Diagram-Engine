@@ -1,6 +1,6 @@
 # Political Data Inventory
 
-The inventory is produced statically by `python -m tools.political_inventory`. It parses source syntax without importing the currently broken packages.
+The inventory is produced statically by `python -m tools.political_inventory`. It parses source syntax without importing political data modules.
 
 ## Baseline
 
@@ -29,7 +29,7 @@ The modular source contains:
 
 Constructor relationships such as `merge_from`, `secede_from`, and `inside_entity` are recorded separately in the full JSON artifact and will be normalized during migration.
 
-## Import Failure
+## Historical Import Failure
 
 The static module graph contains:
 
@@ -37,7 +37,7 @@ The static module graph contains:
 centralisme -> gaullisme -> radicalisme -> centralisme
 ```
 
-`centralisme.py` also contains an unqualified `from radicalisme import ...` import. Reordering package imports cannot make the data architecture reliable because relationship construction still depends on execution order.
+`centralisme.py` also contains an unqualified `from radicalisme import ...` import. The production `load_france()` path does not import these source modules: it records declarations first and resolves relationships after all entities exist. The files remain migration input until they are rewritten as native records.
 
 ## Source Policy
 
@@ -49,7 +49,7 @@ The migration will introduce stable opaque IDs. Historical abbreviations and nam
 
 `generated_political_diagram.py` fails Python parsing at line 132 because a political symbol containing punctuation was embedded in an identifier. It is not a source of truth.
 
-`political_diagram.svg` is useful only as a visual baseline. It cannot validate the current source because neither political database path imports successfully.
+`political_diagram.svg` is useful only as a visual baseline. The modular adapter can now render it through `load_france()`, but visual output cannot validate historical reconciliation or topology correctness.
 
 ## Reproduce
 

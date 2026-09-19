@@ -4,21 +4,6 @@ from .base import (
     PoliticalSystem,
     PoliticalParty,
     PoliticalFederation,
-    PoliticalAlliance,
+  PoliticalAlliance,
 )
-
-# Import all france regions to register them in the system
-from .france import (
-    political_system,
-    anarchisme,
-    trotskisme,
-    communisme,
-    socialisme,
-    insoumission,
-    ecosocialiste,
-    radicalisme,
-    centralisme,
-    gaullisme,
-    agrarisme,
-    nationalisme,
-)
+from .loader import DatasetValidationError, load_france

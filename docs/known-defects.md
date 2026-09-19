@@ -15,17 +15,15 @@ ENG-001 through ENG-013 are covered by ordinary passing regression tests. The fi
 
 | ID | Defect | Reproduction |
 |---|---|---|
-| DATA-001 | Modular imports cycle through centralisme, gaullisme, and radicalisme. | `test_modular_political_dataset_imports` |
 | DATA-002 | Monolithic data references CNIP before its definition. | `test_legacy_political_database_imports` |
 | DATA-003 | Generated political Python is syntactically invalid at line 132. | Static political inventory |
-| DATA-004 | Composite alias strings are used as stable identifiers. | `docs/political-inventory.md` |
 | DATA-005 | Same-year result fallback can attach a result to the wrong election. | Adapter test pending loader migration |
 | DATA-006 | Missing results are treated as zero rather than unknown. | Adapter test pending loader migration |
 | DATA-007 | Shared coalition results are duplicated onto multiple parties. | Data migration report pending |
 | DATA-008 | Federation and satellite memberships are projected after split/merge events. | Renderer integration test pending |
-| DATA-009 | Dissolution does not consistently close memberships. | Dataset validation pending |
-| DATA-010 | Federation shift dictionaries and renderer keys disagree. | Dataset validation pending |
 
 ## Baseline Measurements
 
 Twenty safe focused fixtures report zero structural violations. Three expected-warning curvature fixtures exercise independent, Bundle, and Orbit offset diagnostics. Optional polygon self-intersection remains a separate postcondition.
+
+DATA-001, DATA-004, DATA-009, and DATA-010 are resolved by the deterministic French two-pass loader. The monolith remains reconciliation input and retains its import xfail.

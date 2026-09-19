@@ -268,7 +268,8 @@ def main():
   diagram = PoliticalDiagram(view_width=DIAGRAM_WIDTH, view_height=DIAGRAM_HEIGHT, resolution=10000)
   add_year_grid(diagram)
 
-  parties = db.PoliticalSystem().political_parties
+  system = db.load_france()
+  parties = system.political_parties
   by_symbol = {sym: parties[sym] for sym in parties.keys()}
   symbol_by_party = {party: sym for sym, party in by_symbol.items()}
 
@@ -276,7 +277,7 @@ def main():
   symbols_sorted = sorted(by_symbol.keys(), key=lambda s: (by_symbol[s].creation_date, s))
 
   # 1. Create Federation Bundles early
-  federations = getattr(db.PoliticalSystem(), "political_federations", {})
+  federations = system.political_federations
   federation_bundles = {}
 
   for federation_symbol in sorted(federations.keys()):
@@ -293,7 +294,7 @@ def main():
       for shift in shifts:
           from_x = date_to_x(shift["from"])
           to_x = date_to_x(shift["to"])
-          target_y = orientation_to_y(float(shift["position"]))
+          target_y = orientation_to_y(float(shift["target_position"]))
           if to_x - from_x > SHIFT_MIN_SEGMENT_EPS:
               bundle.shift_to(from_x, to_x, target_y)
 
@@ -674,7 +675,8 @@ def main():
             target_color = getattr(target_party, "color", None) or "black"
 
             sec_target_y = orientation_to_y(float(target_party.initial_political_position))
-            cont_target_y = orientation_to_y(float(evt.get("source_new_position"))) if evt.get("source_new_position") else parent_y
+            source_new_position = evt.get("source_new_position")
+            cont_target_y = orientation_to_y(float(source_new_position)) if source_new_position is not None else parent_y
 
             # Resolve inside_entity for target_party
             sec_in_assembly = None

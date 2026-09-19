@@ -35,11 +35,11 @@ Membership geometry caches are keyed by lineage object rather than membership id
 
 ## Political Flow
 
-Importing `politics_lib` eagerly imports every French data module. Constructors immediately register entities in a process-global `PoliticalSystem`; relationship methods immediately mutate both entities and generate rendering events.
+Importing `politics_lib` exports the domain API without loading French data. `load_france()` records the provisional source modules with peer imports removed, creates every entity with a stable opaque ID, then resolves facts and relationships in a deterministic second pass. The legacy runtime objects remain mutable compatibility adapters while the source is migrated to native records.
 
 `render_political_diagram.py` performs a second imperative translation:
 
-1. Create federation bundles.
+1. Call `load_france()` and create federation bundles.
 2. Create initial party lineages.
 3. Apply merge, split, and position events.
 4. Apply federation memberships.
