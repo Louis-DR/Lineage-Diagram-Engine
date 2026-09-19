@@ -4,6 +4,7 @@ from svgpathtools import Path
 from lineage_diagram.bundle import Bundle
 from lineage_diagram.diagram import Diagram
 from lineage_diagram.lineage import Lineage
+from lineage_diagram.segments import IndependentSegment
 from lineage_diagram.utils import find_t_at_x
 from tools.fixture_cases import (
   assembled_termination,
@@ -12,6 +13,7 @@ from tools.fixture_cases import (
   bundle_transfer,
   independent_transform,
   moving_orbit,
+  orbit_attached_independent_transition,
   orbit_reorder,
   overlapping_shifts,
 )
@@ -101,3 +103,28 @@ def test_dependency_cycle_is_rejected():
 
   with pytest.raises(ValueError, match="Cyclic lineage dependency"):
     diagram.compile()
+
+
+def test_orbit_uses_main_independent_segment_geometry_during_transition():
+  fixture = orbit_attached_independent_transition()
+  main = fixture.lineages["main"]
+  satellite = fixture.lineages["satellite"]
+  fixture.diagram.compile()
+
+  leave_segment = next(
+    segment for segment in main._computed_segments
+    if isinstance(segment, IndependentSegment) and segment.start_x == 100 and segment.end_x == 160
+  )
+  expected_upper, expected_lower = leave_segment.get_geometry_at(130)
+  actual_upper, actual_lower = main.get_geometry_at(130)
+  orbit = fixture.diagram._orbits[0]
+  satellite_upper, satellite_lower = orbit._get_member_geometry_at(130, satellite)
+  expected_normal = (expected_upper - expected_lower) / abs(expected_upper - expected_lower)
+  expected_satellite_center = (
+    (expected_upper + expected_lower) / 2
+    + expected_normal * (main.get_width_at(130) / 2 + orbit.margin + satellite.get_width_at(130) / 2)
+  )
+
+  assert actual_upper == pytest.approx(expected_upper)
+  assert actual_lower == pytest.approx(expected_lower)
+  assert (satellite_upper + satellite_lower) / 2 == pytest.approx(expected_satellite_center)

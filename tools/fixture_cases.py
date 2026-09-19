@@ -322,6 +322,22 @@ def moving_orbit() -> EngineFixture:
   )
 
 
+def orbit_attached_independent_transition() -> EngineFixture:
+  diagram = _diagram()
+  bundle = Bundle(diagram, 0, 80, 4)
+  main = Lineage.create_in_assembly(diagram, GREEN, 0, 12, bundle)
+  main.leave(100, 160, bundle, 100)
+  orbit = Orbit(diagram, main, 2)
+  satellite = Lineage.create_in_assembly(diagram, RED, 0, 4, orbit, 1)
+  return EngineFixture(
+    "orbit-attached-independent-transition",
+    "An orbit follows a main lineage through its independent bundle-leave segment.",
+    diagram,
+    {"main": main, "satellite": satellite},
+    (100, 160),
+  )
+
+
 def assembled_termination() -> EngineFixture:
   diagram = _diagram()
   bundle = Bundle(diagram, 0, 80, 6)
@@ -363,6 +379,7 @@ FIXTURE_BUILDERS: tuple[Callable[[], EngineFixture], ...] = (
   orbit_join_leave,
   orbit_reorder,
   moving_orbit,
+  orbit_attached_independent_transition,
   assembled_termination,
   color_transition,
   bundle_merge_replacement,

@@ -986,16 +986,7 @@ class Lineage(ScalablePath, ShiftablePath):
                     # We access the protected method _get_member_geometry_at which both should implement
                     return segment.bundle._get_member_geometry_at(x, self)
                 else:
-                    # IndependentSegment: calculate from baseline path
-                    baseline_path = self.get_baseline_path()
-                    t = find_t_at_x(baseline_path, x)
-                    point = baseline_path.point(t)
-                    normal = baseline_path.normal(t)
-                    width = self.get_width_at(x)
-
-                    upper = point + normal * (width / 2)
-                    lower = point - normal * (width / 2)
-                    return upper, lower
+                    return segment.get_geometry_at(x)
 
     # If no segments (not compiled yet) or out of range
     # Fallback to calculating from events (Independent behavior)

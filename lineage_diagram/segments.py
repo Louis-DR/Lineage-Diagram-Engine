@@ -38,6 +38,15 @@ class IndependentSegment(Segment, ShiftablePath, ScalablePath):
     self._shift_events = shift_events
     self._scale_events = scale_events
 
+  def get_geometry_at(self, x: float) -> tuple[complex, complex]:
+    """Return ribbon edges from this segment's local baseline and width state."""
+    baseline_path = self.get_baseline_path()
+    t = find_t_at_x(baseline_path, x)
+    point = baseline_path.point(t)
+    normal = baseline_path.normal(t)
+    width = self.get_width_at(x)
+    return point + normal * (width / 2), point - normal * (width / 2)
+
   def compile(self) -> tuple[list[complex],list[complex]]:
     """Compile the segment and return the lists of upper and lower points of the shape."""
     self._upper_points = []
