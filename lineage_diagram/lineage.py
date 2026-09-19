@@ -63,6 +63,7 @@ class Lineage(ScalablePath, ShiftablePath):
       z:                float = 0.0,
     ) -> "Lineage":
     """Create a lineage that starts inside an assembly."""
+    in_assembly.validate_member_index(index, allow_append=True)
     # For Orbit, index is mandatory and cannot be 0 (or -1 default if not handled)
     # But let's assume the caller provides a valid index for Orbit.
     # Bundle handles -1 as append.
@@ -243,6 +244,7 @@ class Lineage(ScalablePath, ShiftablePath):
     ) -> "Lineage":
     """Create a lineage resulting from the merge of parents."""
     if in_assembly:
+      in_assembly.validate_member_index(index, allow_append=True)
       # The child exists at start_x. Before then, its transition reservation
       # participates in the parent assembly without creating an impossible
       # stable membership that predates the lineage lifecycle.
@@ -287,15 +289,15 @@ class Lineage(ScalablePath, ShiftablePath):
             current_y = shift.to_y
         return current_y
 
-    parents.sort(key=get_parent_y)
+    ordered_parents = sorted(parents, key=get_parent_y)
 
     # Calculate layout
     parent_target_widths, parent_centers = cls._calculate_merge_layout(
-      parents, merge_from_x, start_x, layout_base_y, start_w
+      ordered_parents, merge_from_x, start_x, layout_base_y, start_w
     )
 
     # Iterate over parents and their attributes at merge point
-    for parent, parent_target_w, parent_center in zip(parents, parent_target_widths, parent_centers):
+    for parent, parent_target_w, parent_center in zip(ordered_parents, parent_target_widths, parent_centers):
       # We need to handle 2 cases:
       # 1. Parent is independent -> shift to target Y
       # 2. Parent is in a bundle -> leave bundle to target Y
@@ -353,7 +355,7 @@ class Lineage(ScalablePath, ShiftablePath):
         duration = start_x - merge_from_x
         fade_duration = duration * diagram.color_transition_duration
         shade_start = start_x - fade_duration
-        parent.shade(shade_start, start_x, color)
+        parent.shade(shade_start, start_x, child._color_at(start_x))
       parent.terminate_at(start_x)
     return child
 
@@ -373,7 +375,8 @@ class Lineage(ScalablePath, ShiftablePath):
       - index: int (optional, for assembly)
       - z: float (optional, default 0.0)
     """
-    original_children_specs = list(children_specs)
+    original_children_specs = [dict(spec) for spec in children_specs]
+    children_specs = list(original_children_specs)
 
     # Sort children specs by target_y (or index if in bundle)
     # If target_y is not present (e.g. in bundle), we might use index or default to 0
@@ -408,8 +411,8 @@ class Lineage(ScalablePath, ShiftablePath):
       active_memberships = parent_bundle.get_memberships_at(start_x)
       parent_membership = next((membership for membership in active_memberships if membership.lineage is self), None)
       if parent_membership is not None:
-        if hasattr(parent_membership, 'index'):
-          next_index = parent_membership.index
+        if hasattr(parent_bundle, 'effective_index_of'):
+          next_index = parent_bundle.effective_index_of(self, start_x)
           index_step = 1 if next_index > 0 else -1
         else:
           next_index = active_memberships.index(parent_membership)
@@ -526,7 +529,10 @@ class Lineage(ScalablePath, ShiftablePath):
         if membership.lineage == self and membership.start_x <= start_x <= membership.end_x:
           membership.end_x             = start_x
           membership.fade_out_duration = 0.0
-          reservation_index = membership.index if hasattr(membership, "index") else active_slot
+          reservation_index = (
+            parent_bundle.effective_index_of(self, start_x)
+            if hasattr(parent_bundle, "effective_index_of") else active_slot
+          )
           parent_bundle.reserve_member(self, start_x, split_to_x, fade_in=False, index=reservation_index)
           break
 
@@ -666,7 +672,7 @@ class Lineage(ScalablePath, ShiftablePath):
             z           = spec.get('z', 0.0)
 
             # Start with parent color, shade to new color IF auto_color_transition is True
-            initial_color = parent.color if parent.diagram.auto_color_transition else spec['color']
+            initial_color = parent._color_at(start_x) if parent.diagram.auto_color_transition else spec['color']
             new_lineage = cls(parent.diagram, initial_color, start_x, new_start_y, new_start_w, z=z)
             if parent.diagram.auto_color_transition:
                 # Split: Align to start (start_x)
@@ -727,7 +733,7 @@ class Lineage(ScalablePath, ShiftablePath):
             current_y = shift.to_y
         return current_y
 
-    parents.sort(key=get_parent_y)
+    ordered_parents = sorted(parents, key=get_parent_y)
 
     # Resolve target_y if not provided
     child_target_y = target_y
@@ -739,11 +745,11 @@ class Lineage(ScalablePath, ShiftablePath):
 
     # We need to calculate where they should be at `end_x` (the merge point).
     parent_target_widths, parent_centers = self._calculate_merge_layout(
-      parents, merge_from_x, end_x, child_target_y, child_start_w
+      ordered_parents, merge_from_x, end_x, child_target_y, child_start_w
     )
 
     # 2. Apply updates
-    for parent, target_w_at_merge, center_at_merge in zip(parents, parent_target_widths, parent_centers):
+    for parent, target_w_at_merge, center_at_merge in zip(ordered_parents, parent_target_widths, parent_centers):
         if parent == self:
             # Merging Lineage (Ends)
             parent.scale_to(merge_from_x, end_x, target_w_at_merge)
@@ -753,7 +759,7 @@ class Lineage(ScalablePath, ShiftablePath):
                 duration = end_x - merge_from_x
                 fade_duration = duration * self.diagram.color_transition_duration
                 shade_start = end_x - fade_duration
-                parent.shade(shade_start, end_x, target_lineage.color)
+                parent.shade(shade_start, end_x, target_lineage._color_at(end_x))
             parent.terminate_at(end_x)
         else:
             # Parent Lineage (Target)
@@ -802,6 +808,7 @@ class Lineage(ScalablePath, ShiftablePath):
 
   def join(self, from_x:float, to_x:float, to_assembly:"Bundle | Orbit", index:int=-1):
     """Join assembly over a transition X range."""
+    to_assembly.validate_member_index(index, allow_append=True)
     self.membership_events.append(MembershipEvent(from_x, to_x, MembershipEventType.JOIN, assembly=to_assembly))
     # Inform the assembly of the new member.
     # The lineage starts entering at from_x, and is fully inside at to_x.
@@ -830,8 +837,8 @@ class Lineage(ScalablePath, ShiftablePath):
     ), None)
     if active_membership is None:
       raise ValueError("Cannot leave an assembly while the lineage is independent")
-    if hasattr(active_membership, "index"):
-      reservation_index = active_membership.index
+    if hasattr(from_assembly, "effective_index_of"):
+      reservation_index = from_assembly.effective_index_of(self, from_x)
     else:
       reservation_index = from_assembly.get_memberships_at(from_x).index(active_membership)
     self.membership_events.append(MembershipEvent(
@@ -865,6 +872,7 @@ class Lineage(ScalablePath, ShiftablePath):
     ), None)
     if active_membership is None:
       raise ValueError("Cannot reorder a lineage while it is independent")
+    in_assembly.validate_member_index(new_index, allow_append=False)
     self.membership_events.append(MembershipEvent(from_x, to_x, MembershipEventType.LEAVE, assembly=in_assembly))
     self.membership_events.append(MembershipEvent(from_x, to_x, MembershipEventType.JOIN, assembly=in_assembly))
     in_assembly.reorder_member(self, from_x, to_x, new_index)
@@ -880,6 +888,7 @@ class Lineage(ScalablePath, ShiftablePath):
     """
     Transfer the lineage from a bundle/orbit to another over a transition.
     """
+    to_assembly.validate_member_index(index, allow_append=True)
     # Leave current assembly (maintain Y relative to it)
     self.leave(from_x, to_x, from_assembly, to_y=None)
     # Join new assembly at index
@@ -946,15 +955,20 @@ class Lineage(ScalablePath, ShiftablePath):
     """Return normalized scalar and topology state at a timeline coordinate."""
     frame = self.frame_at(x, side)
     width = NumericTimeline(self.start_w, self._scale_events, "to_w").value_at(x, side)
+    color = self._color_at(x, side)
+    assembly = self._assembly_at(x, side)
+    return LineageState(self.id, x, frame.center.imag, width, color, assembly.id if assembly else None)
+
+  def _color_at(self, x: float, side: BoundarySide = BoundarySide.RIGHT) -> str:
+    """Resolve the normalized effective color at an event boundary."""
     try:
-      color = ColorTimeline(self.color, self._shade_events).value_at(x, side)
+      return ColorTimeline(self.color, self._shade_events).value_at(x, side)
     except ValueError:
       color = self.color
       for event in sorted(self._shade_events, key=lambda item: (item.to_x, item.from_x)):
         if x > event.to_x or (x == event.to_x and side == BoundarySide.RIGHT):
           color = event.color
-    assembly = self._assembly_at(x, side)
-    return LineageState(self.id, x, frame.center.imag, width, color, assembly.id if assembly else None)
+      return color
 
   def get_geometry_at(self, x: float) -> tuple[complex, complex]:
     """
@@ -1274,7 +1288,11 @@ class Lineage(ScalablePath, ShiftablePath):
         start_y = (parent_y_at_start + parent_w / 2) - new_target_w / 2
 
     # 3. Create new lineage
-    new_lineage = cls(parent.diagram, new_color, start_x, start_y, new_target_w, z=z)
+    initial_color = parent._color_at(start_x) if parent.diagram.auto_color_transition else new_color
+    new_lineage = cls(parent.diagram, initial_color, start_x, start_y, new_target_w, z=z)
+    if parent.diagram.auto_color_transition:
+        fade_duration = (transition_to_x - start_x) * parent.diagram.color_transition_duration
+        new_lineage.shade(start_x, start_x + fade_duration, new_color)
 
     if new_in_bundle:
         new_lineage.join(start_x, transition_to_x, new_in_bundle, new_index)
@@ -1324,6 +1342,9 @@ class Lineage(ScalablePath, ShiftablePath):
     # "no scale on the source lineage" -> self maintains width?
     # "just a shift and ending at the to_x"
     self.shift_to(transition_from_x, end_x, end_y)
+    if self.diagram.auto_color_transition:
+      fade_duration = (end_x - transition_from_x) * self.diagram.color_transition_duration
+      self.shade(end_x - fade_duration, end_x, target_lineage._color_at(end_x))
     self.terminate_at(end_x)
 
   def draw(self):

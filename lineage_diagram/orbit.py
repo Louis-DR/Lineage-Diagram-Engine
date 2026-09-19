@@ -44,6 +44,11 @@ class Orbit:
     def memberships(self) -> list[OrbitMembership]:
         return self._memberships
 
+    @staticmethod
+    def validate_member_index(index: int, *, allow_append: bool = False):
+        if not isinstance(index, int) or index == 0:
+            raise ValueError("Orbit index must be a nonzero integer. Use positive for upper side and negative for lower side.")
+
     def add_member(
         self,
         lineage:         "Lineage",
@@ -53,8 +58,7 @@ class Orbit:
         fade_in_duration: float = 0.0,
     ):
         """Add a satellite lineage to the orbit."""
-        if index == 0:
-            raise ValueError("Orbit index cannot be 0. Use positive for upper side, negative for lower side.")
+        self.validate_member_index(index)
 
         new_membership = OrbitMembership(
             lineage           = lineage,
@@ -71,6 +75,7 @@ class Orbit:
         return [membership for membership in self._memberships if membership.start_x <= x + 1e-5 and x <= membership.end_x + 1e-5]
 
     def reserve_member(self, lineage:"Lineage", start_x:float, end_x:float, *, fade_in:bool, index:int=-1):
+        self.validate_member_index(index)
         self._reservations.append(AssemblyReservation(
             lineage=lineage,
             start_x=start_x,
@@ -81,9 +86,18 @@ class Orbit:
         ))
 
     def reorder_member(self, lineage:"Lineage", from_x:float, to_x:float, new_index:int):
-        if new_index == 0:
-            raise ValueError("Orbit index cannot be 0")
+        self.validate_member_index(new_index)
         self._reorder_events.append(ReorderTransition(lineage, from_x, to_x, new_index))
+
+    def effective_index_of(self, lineage:"Lineage", x:float) -> int:
+        """Return a member's signed index after every completed reorder."""
+        membership = next((
+            item for item in self.get_memberships_at(x)
+            if item.lineage is lineage
+        ), None)
+        if membership is None:
+            raise ValueError("Lineage is not an active Orbit member")
+        return self._index_at(membership, x)
 
     def _get_layout_memberships_at(self, x:float):
         memberships = list(self.get_memberships_at(x))

@@ -1,3 +1,4 @@
+import math
 from typing import TYPE_CHECKING
 
 from .timeline import BoundarySide
@@ -21,7 +22,9 @@ class Diagram:
       auto_color_transition:     bool  = True,
       lineage_stroke_width:      float = 0.0,
       color_transition_duration: float = 1.0,
-    ):
+  ):
+    if not math.isfinite(color_transition_duration) or not 0.0 <= color_transition_duration <= 1.0:
+      raise ValueError("color_transition_duration must be a finite fraction between 0 and 1")
     self.view_width  = view_width
     self.view_height = view_height
     self.resolution  = resolution

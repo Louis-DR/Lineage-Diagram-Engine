@@ -63,6 +63,13 @@ class Bundle(ShiftablePath):
     """Public accessor for memberships."""
     return self._memberships
 
+  @staticmethod
+  def validate_member_index(index: int, *, allow_append: bool):
+    if not isinstance(index, int):
+      raise ValueError("Bundle index must be an integer")
+    if index < -1 or (index == -1 and not allow_append):
+      raise ValueError("Bundle index must be nonnegative" + (" or -1 to append" if allow_append else ""))
+
   def add_member(
       self,
       lineage:         "Lineage",
@@ -70,8 +77,9 @@ class Bundle(ShiftablePath):
       end_x:            float,
       fade_in_duration: float = 0.0,
       index:            int   = -1,
-    ):
+  ):
     """Add a member lineage to bundle."""
+    self.validate_member_index(index, allow_append=True)
     new_membership = BundleMembership(
       lineage           = lineage,
       start_x           = start_x,
@@ -126,7 +134,8 @@ class Bundle(ShiftablePath):
       *,
       fade_in: bool,
       index: int = -1,
-    ):
+  ):
+    self.validate_member_index(index, allow_append=True)
     self._reservations.append(AssemblyReservation(
       lineage=lineage,
       start_x=start_x,
@@ -137,6 +146,7 @@ class Bundle(ShiftablePath):
     ))
 
   def reorder_member(self, lineage: "Lineage", from_x: float, to_x: float, new_index: int):
+    self.validate_member_index(new_index, allow_append=False)
     self._reorder_events.append(ReorderTransition(lineage, from_x, to_x, new_index))
 
   def get_memberships_at(self, x:float) -> list[BundleMembership]:

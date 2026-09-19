@@ -9,11 +9,10 @@ The test suite records confirmed defects as strict expected failures. Remove the
 | ENG-008 | Orbit attachment to an independent compiled transition may use the lineage-wide baseline instead of segment geometry. | Not yet minimized |
 | ENG-009 | Tight normal offsets can backtrack or self-intersect; bundle back-filtering is absent. | Existing political SVG and diagnostic backtrack checks |
 | ENG-010 | Split/merge widths can overlap because individual widths are clamped without constraining their sum. | Contract decision and fixture still required |
-| ENG-011 | Shade state is not time-queryable and overlapping shade events can produce invalid gradient ordering. | Fixture still required |
 
 ## Resolved Engine Defects
 
-ENG-001 through ENG-007, ENG-012, and ENG-013 are covered by ordinary passing regression tests. The fixes introduce normalized scalar timelines, stable topology memberships with transition reservations, whole-assembly reorder interpolation, lifecycle clipping, deterministic SVG IDs, and exact event-aware sampling.
+ENG-001 through ENG-007 and ENG-011 through ENG-013 are covered by ordinary passing regression tests. The fixes introduce normalized scalar timelines, effective color sampling at relationship boundaries, stable topology memberships with transition reservations, whole-assembly reorder interpolation, lifecycle clipping, deterministic SVG IDs, and exact event-aware sampling.
 
 ## Political Data
 

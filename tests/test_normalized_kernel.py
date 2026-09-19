@@ -1,8 +1,11 @@
+import copy
+
 import pytest
 
 from lineage_diagram.bundle import Bundle
 from lineage_diagram.diagram import Diagram
 from lineage_diagram.lineage import Lineage
+from lineage_diagram.orbit import Orbit
 from lineage_diagram.paths import ScaleEvent
 from lineage_diagram.timeline import BoundarySide, ColorTimeline, NumericTimeline
 from tools.fixture_cases import (
@@ -72,6 +75,49 @@ def test_overlapping_color_resumes_interrupted_target_with_ordered_stops():
   assert interrupted.value_at(190) == "#00ff00"
   assert interrupted.value_at(260) == "#0000ff"
   assert [x for x, _ in interrupted.stops(360)] == sorted(x for x, _ in interrupted.stops(360))
+
+
+def test_branch_creation_inherits_the_effective_parent_color_then_shades_to_its_target():
+  diagram = Diagram(200, 100, color_transition_duration=0.2)
+  parent = Lineage(diagram, "blue", 0, 50, 10)
+  parent.shade(0, 20, "green")
+
+  branch = Lineage.create_from_lineage(parent, 100, 200, "red", 5, 70)
+
+  assert branch.color == parent._color_at(100)
+  assert branch._shade_events[-1].from_x == 100
+  assert branch._shade_events[-1].to_x == 120
+  assert branch._color_at(100) == parent._color_at(100)
+  assert branch._color_at(120) == "#ff0000"
+
+
+def test_branch_creation_can_disable_automatic_color_transition():
+  diagram = Diagram(200, 100, auto_color_transition=False, color_transition_duration=0.2)
+  parent = Lineage(diagram, "blue", 0, 50, 10)
+
+  branch = Lineage.create_from_lineage(parent, 100, 200, "red", 5, 70)
+
+  assert branch.color == "red"
+  assert branch._shade_events == []
+
+
+def test_lineage_end_converges_to_the_target_effective_color():
+  diagram = Diagram(200, 100, color_transition_duration=0.2)
+  source = Lineage(diagram, "red", 0, 30, 10)
+  target = Lineage(diagram, "blue", 0, 70, 10)
+  target.shade(0, 50, "green")
+
+  source.end_at_lineage(target, 100, 200)
+
+  assert source._shade_events[-1].from_x == 180
+  assert source._shade_events[-1].to_x == 200
+  assert source._shade_events[-1].color == target._color_at(200)
+
+
+@pytest.mark.parametrize("duration", (-0.1, 1.1, float("inf")))
+def test_color_transition_duration_must_be_a_finite_fraction(duration):
+  with pytest.raises(ValueError, match="finite fraction"):
+    Diagram(200, 100, color_transition_duration=duration)
 
 
 def test_reorder_interpolates_every_bundle_member():
@@ -211,3 +257,78 @@ def test_orbit_merge_and_split_keep_lower_side_indices_and_newest_inner_tie_orde
   }
   assert lower_start_distances[split_red] < lower_start_distances[split_blue]
   assert upper_start_distances[split_upper_blue] > upper_start_distances[split_upper_red]
+
+
+def test_orbit_leave_and_split_use_the_effective_reordered_index():
+  diagram = Diagram(200, 100)
+  main = Lineage(diagram, "black", 0, 50, 20)
+  orbit = Orbit(diagram, main)
+  satellite = Lineage.create_in_assembly(diagram, "blue", 0, 8, orbit, -1)
+  satellite.reorder(20, 40, orbit, 1)
+
+  satellite.leave(50, 70, orbit)
+  leave_reservation = next(
+    reservation for reservation in orbit._reservations
+    if reservation.lineage is satellite and not reservation.fade_in_duration
+  )
+  assert leave_reservation.index == 1
+
+  parent = Lineage.create_in_assembly(diagram, "red", 0, 8, orbit, -1)
+  parent.reorder(20, 40, orbit, 1)
+  specs = [
+    {"color": "green", "target_w": 4, "in_assembly": orbit},
+    {"color": "gold", "target_w": 4, "in_assembly": orbit},
+  ]
+  parent.split(50, 70, specs)
+
+  children = [
+    membership for membership in orbit.memberships
+    if membership.lineage is not satellite and membership.lineage is not parent
+  ]
+  assert [membership.index for membership in children] == [1, 2]
+
+
+def test_invalid_orbit_operations_do_not_partially_mutate_topology():
+  diagram = Diagram(200, 100)
+  main = Lineage(diagram, "black", 0, 50, 20)
+  orbit = Orbit(diagram, main)
+  source = Lineage(diagram, "red", 0, 30, 8)
+  member = Lineage.create_in_assembly(diagram, "blue", 0, 8, orbit, -1)
+
+  with pytest.raises(ValueError, match="nonzero"):
+    source.join(20, 40, orbit, 0)
+  assert source.membership_events == []
+  assert all(membership.lineage is not source for membership in orbit.memberships)
+
+  with pytest.raises(ValueError, match="nonzero"):
+    member.reorder(20, 40, orbit, 0)
+  assert member.membership_events == []
+  assert orbit._reorder_events == []
+
+  destination = Orbit(diagram, main)
+  with pytest.raises(ValueError, match="nonzero"):
+    member.transfer(50, 70, orbit, destination, 0)
+  assert member.membership_events == []
+  assert next(membership for membership in orbit.memberships if membership.lineage is member).end_x == diagram.view_width
+
+
+def test_split_and_merge_do_not_mutate_caller_collections():
+  diagram = Diagram(200, 100)
+  parent = Lineage(diagram, "blue", 0, 50, 20)
+  specs = [
+    {"color": "red", "target_w": 8, "target_y": 70},
+    {"color": "green", "target_w": 12, "target_y": 30},
+  ]
+  expected_specs = copy.deepcopy(specs)
+
+  parent.split(20, 40, specs)
+
+  assert specs == expected_specs
+
+  first = Lineage(diagram, "red", 0, 80, 8)
+  second = Lineage(diagram, "green", 0, 20, 8)
+  parents = [first, second]
+
+  Lineage.create_from_merge(diagram, "blue", 60, 80, 50, 12, parents)
+
+  assert parents == [first, second]
