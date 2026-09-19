@@ -13,7 +13,11 @@ from lineage_diagram.lineage import Lineage
 @pytest.mark.parametrize("builder", FIXTURE_BUILDERS, ids=lambda builder: builder.__name__)
 def test_fixture_renders_valid_svg(builder):
   fixture = builder()
-  svg = fixture.diagram.to_svg()
+  if fixture.expected_geometry_warning:
+    with pytest.warns(RuntimeWarning, match="Unsafe geometry"):
+      svg = fixture.diagram.to_svg()
+  else:
+    svg = fixture.diagram.to_svg()
   root = ET.fromstring(svg)
 
   assert root.tag.endswith("svg")

@@ -6,6 +6,7 @@ from lineage_diagram.diagram import Diagram
 from lineage_diagram.lineage import Lineage
 from lineage_diagram.segments import IndependentSegment
 from lineage_diagram.timeline import BoundarySide
+from lineage_diagram.geometry_safety import CurvatureSafetyPolicy, UnsafeNormalOffsetError
 from lineage_diagram.utils import find_t_at_x
 from tools.fixture_cases import (
   assembled_termination,
@@ -18,6 +19,10 @@ from tools.fixture_cases import (
   orbit_reorder,
   overcommitted_split_merge_widths,
   overlapping_shifts,
+  safe_independent_normal_offset,
+  tight_bundle_outer_normal_offset,
+  tight_independent_normal_offset,
+  tight_orbit_satellite_normal_offset,
 )
 from tools.geometry_diagnostics import diagnose_fixture
 
@@ -188,3 +193,50 @@ def test_continuing_split_and_merge_into_use_packet_conserving_widths():
 
   assert sum(frame.width for frame in split_frames) == pytest.approx(20, abs=1e-3)
   assert sum(frame.width for frame in merge_frames) == pytest.approx(20, abs=1e-3)
+
+
+def test_tight_independent_normal_offset_warns_with_measured_context():
+  fixture = tight_independent_normal_offset()
+  report = fixture.diagram.validate_geometry()
+  diagnostics = [diagnostic.as_dict() for diagnostic in report.diagnostics]
+  unsafe = next(diagnostic for diagnostic in diagnostics if diagnostic["kind"] == "unsafe-normal-offset")
+
+  assert unsafe["producer"] == "independent-segment"
+  assert unsafe["lineage"] == fixture.lineages["lineage"].id
+  assert unsafe["offset_radius_ratio"] > unsafe["policy_limit"] == 0.8
+  assert unsafe["x"] not in fixture.event_xs
+  assert unsafe["source_transition"] == {"from_x": 20, "to_x": 60, "to_y": 130}
+  assert unsafe["minimum_safe_radius"] == pytest.approx(abs(unsafe["signed_offset"]) / 0.8)
+  with pytest.warns(RuntimeWarning, match=r"during shift 20->60 to y=130") as warnings:
+    fixture.diagram.compile()
+  assert "radius=" in str(warnings[0].message)
+
+  fixture.diagram.curvature_policy = CurvatureSafetyPolicy(mode="reject")
+  with pytest.raises(UnsafeNormalOffsetError, match="Unsafe normal offsets"):
+    fixture.diagram.compile()
+
+
+def test_safe_independent_normal_offset_compiles_under_the_default_policy():
+  fixture = safe_independent_normal_offset()
+  assert fixture.diagram.validate_geometry().is_safe
+  fixture.diagram.compile()
+
+
+@pytest.mark.parametrize(
+  ("builder", "producer"),
+  [
+    (tight_bundle_outer_normal_offset, "bundle"),
+    (tight_orbit_satellite_normal_offset, "orbit"),
+  ],
+  ids=("bundle", "orbit"),
+)
+def test_assembly_normal_offset_diagnostics_identify_the_producer(builder, producer):
+  report = builder().diagram.validate_geometry()
+  unsafe = [
+    diagnostic.as_dict() for diagnostic in report.diagnostics
+    if diagnostic.kind == "unsafe-normal-offset" and diagnostic.details["producer"] == producer
+  ]
+
+  assert unsafe
+  assert all(diagnostic["membership"] for diagnostic in unsafe)
+  assert all(diagnostic["offset_radius_ratio"] > 0.8 for diagnostic in unsafe)

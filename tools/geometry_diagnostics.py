@@ -141,7 +141,9 @@ def diagnose_fixture(
       "summary": {"violation_count": len(violations), "by_kind": {"dependency-cycle": len(violations)}},
     }
 
-  draw_order = fixture.diagram.compile()
+  geometry_report = fixture.diagram.validate_geometry()
+  violations.extend(diagnostic.as_dict() for diagnostic in geometry_report.diagnostics)
+  draw_order = sorted(fixture.diagram._lineages, key=lambda lineage: lineage.z)
 
   for lineage in draw_order:
     name = names.get(lineage, f"lineage-{fixture.diagram._lineages.index(lineage)}")

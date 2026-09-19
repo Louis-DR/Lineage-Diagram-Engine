@@ -6,11 +6,10 @@ The test suite records confirmed defects as strict expected failures. Remove the
 
 | ID | Defect | Reproduction |
 |---|---|---|
-| ENG-009 | Tight normal offsets can backtrack or self-intersect; bundle back-filtering is absent. | Existing political SVG and diagnostic backtrack checks |
 
 ## Resolved Engine Defects
 
-ENG-001 through ENG-008 and ENG-010 through ENG-013 are covered by ordinary passing regression tests. The fixes introduce normalized scalar timelines, packet-conserving split/merge widths, effective color sampling at relationship boundaries, segment-local independent geometry, stable topology memberships with transition reservations, whole-assembly reorder interpolation, lifecycle clipping, deterministic SVG IDs, and exact event-aware sampling.
+ENG-001 through ENG-013 are covered by ordinary passing regression tests. The fixes introduce normalized scalar timelines, packet-conserving split/merge widths, curvature-safe normal-offset rejection, effective color sampling at relationship boundaries, segment-local independent geometry, stable topology memberships with transition reservations, whole-assembly reorder interpolation, lifecycle clipping, deterministic SVG IDs, and exact event-aware sampling.
 
 ## Political Data
 
@@ -29,4 +28,4 @@ ENG-001 through ENG-008 and ENG-010 through ENG-013 are covered by ordinary pass
 
 ## Baseline Measurements
 
-The 19 focused fixtures currently report zero structural violations under the default diagnostics. Optional self-intersection diagnostics and the unresolved curvature policy remain separate work.
+Twenty safe focused fixtures report zero structural violations. Three expected-warning curvature fixtures exercise independent, Bundle, and Orbit offset diagnostics. Optional polygon self-intersection remains a separate postcondition.

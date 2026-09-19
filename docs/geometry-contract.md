@@ -16,7 +16,7 @@ This document describes target semantics. Known differences in the current imple
 - Assembly presence may animate effective width independently from nominal lineage width.
 - Width may not be negative or nonfinite.
 
-Parallel curves become singular when an offset approaches the local curvature radius. A future solver must calculate the maximum required offset, detect unsafe transitions, and either lengthen the transition, choose a curvature-safe path, or reject it with a diagnostic. Removing backward points is not an exact-width solution and may only be used as an explicit fallback.
+Normal offsets should satisfy `abs(offset) / curvature_radius <= 0.80`. Compilation warns by default about a nonfinite, unsafe, or x-backtracking offset with its lineage, producer, edge, active shift interval, sampled coordinate, measured curvature, and ratio. Callers may opt into enforcement with `CurvatureSafetyPolicy(mode="reject")`. Explicit discontinuities are separate geometry boundaries; the renderer may not construct a normal offset through one. Removing backward points, changing widths, extending timing, or replacing a curve is not an automatic repair.
 
 ## Lifetimes
 

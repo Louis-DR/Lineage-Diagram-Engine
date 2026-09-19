@@ -20,6 +20,7 @@ class EngineFixture:
   diagram: Diagram
   lineages: dict[str, Lineage]
   event_xs: tuple[float, ...]
+  expected_geometry_warning: bool = False
 
 
 def _diagram(height: float = 160) -> Diagram:
@@ -392,6 +393,66 @@ def color_transition() -> EngineFixture:
   )
 
 
+def tight_independent_normal_offset() -> EngineFixture:
+  diagram = _diagram()
+  lineage = Lineage(diagram, RED, 0, 30, 40)
+  lineage.shift_to(20, 60, 130)
+  return EngineFixture(
+    "tight-independent-normal-offset",
+    "A wide ribbon takes a tight independent curve and reports a safety warning.",
+    diagram,
+    {"lineage": lineage},
+    (20, 60),
+    expected_geometry_warning=True,
+  )
+
+
+def safe_independent_normal_offset() -> EngineFixture:
+  diagram = _diagram()
+  lineage = Lineage(diagram, RED, 0, 30, 40)
+  lineage.shift_to(20, 180, 130)
+  return EngineFixture(
+    "safe-independent-normal-offset",
+    "The same wide ribbon uses a sufficiently long safe transition.",
+    diagram,
+    {"lineage": lineage},
+    (20, 180),
+  )
+
+
+def tight_bundle_outer_normal_offset() -> EngineFixture:
+  diagram = _diagram()
+  bundle = Bundle(diagram, 0, 30, 4)
+  bundle.shift_to(20, 60, 130)
+  first = Lineage.create_in_assembly(diagram, RED, 0, 30, bundle)
+  second = Lineage.create_in_assembly(diagram, BLUE, 0, 30, bundle)
+  return EngineFixture(
+    "tight-bundle-outer-normal-offset",
+    "Packed Bundle members exceed the curvature-safe outer offset.",
+    diagram,
+    {"first": first, "second": second},
+    (20, 60),
+    expected_geometry_warning=True,
+  )
+
+
+def tight_orbit_satellite_normal_offset() -> EngineFixture:
+  diagram = _diagram()
+  main = Lineage(diagram, GREEN, 0, 30, 20)
+  main.shift_to(20, 60, 130)
+  orbit = Orbit(diagram, main, 4)
+  inner = Lineage.create_in_assembly(diagram, BLUE, 0, 20, orbit, 1)
+  outer = Lineage.create_in_assembly(diagram, RED, 0, 20, orbit, 2)
+  return EngineFixture(
+    "tight-orbit-satellite-normal-offset",
+    "An outer Orbit satellite exceeds the curvature-safe stack offset.",
+    diagram,
+    {"main": main, "inner": inner, "outer": outer},
+    (20, 60),
+    expected_geometry_warning=True,
+  )
+
+
 FIXTURE_BUILDERS: tuple[Callable[[], EngineFixture], ...] = (
   independent_transform,
   overlapping_shifts,
@@ -412,6 +473,10 @@ FIXTURE_BUILDERS: tuple[Callable[[], EngineFixture], ...] = (
   continuing_merge_boundary,
   simultaneous_bundle_join_leave,
   orbit_merge_split,
+  tight_independent_normal_offset,
+  safe_independent_normal_offset,
+  tight_bundle_outer_normal_offset,
+  tight_orbit_satellite_normal_offset,
 )
 
 

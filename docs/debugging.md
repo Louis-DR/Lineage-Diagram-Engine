@@ -14,7 +14,7 @@ Passing tests characterize established behavior. Strict expected failures identi
 python -m tools.geometry_diagnostics
 ```
 
-The command builds every small fixture through the production `Diagram.compile()` pipeline and writes `artifacts/diagnostics/geometry.json`.
+The command builds every small fixture through the production pipeline in report mode and writes `artifacts/diagnostics/geometry.json`. Normal rendering warns about unsafe normal offsets; use `CurvatureSafetyPolicy(mode="reject")` when a caller must enforce rejection, or `Diagram.validate_geometry()` to inspect them without warnings.
 
 Current violation kinds include:
 
@@ -31,6 +31,8 @@ Current violation kinds include:
 - `membership-after-termination`
 - `dependency-cycle`
 - `polygon-self-intersection`
+- `unsafe-normal-offset`
+- `normal-offset-x-backtrack`
 
 Use `--self-intersections` for the more expensive polygon check.
 
@@ -49,6 +51,8 @@ Open `artifacts/fixtures/index.html`. Each fixture includes:
 - Event boundary lines
 - Centerlines and sample markers
 - Measured violation counts
+
+Expected-warning fixtures retain their geometry report and render normally so their invalid edge geometry remains inspectable in the gallery.
 
 The gallery deliberately uses small diagrams. A defect should be reduced here before using the comprehensive or political diagram for diagnosis.
 

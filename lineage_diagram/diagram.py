@@ -1,7 +1,15 @@
 import math
+import warnings
 from typing import TYPE_CHECKING
 
 from .timeline import BoundarySide
+from .geometry_safety import (
+  CurvatureSafetyPolicy,
+  GeometryValidationReport,
+  UnsafeNormalOffsetError,
+  format_geometry_diagnostics,
+  validate_compiled_geometry,
+)
 
 if TYPE_CHECKING:
   from .lineage import Lineage
@@ -22,6 +30,7 @@ class Diagram:
       auto_color_transition:     bool  = True,
       lineage_stroke_width:      float = 0.0,
       color_transition_duration: float = 1.0,
+      curvature_policy: CurvatureSafetyPolicy | None = None,
   ):
     if not math.isfinite(color_transition_duration) or not 0.0 <= color_transition_duration <= 1.0:
       raise ValueError("color_transition_duration must be a finite fraction between 0 and 1")
@@ -31,6 +40,8 @@ class Diagram:
     self.auto_color_transition     = auto_color_transition
     self.lineage_stroke_width      = lineage_stroke_width
     self.color_transition_duration = color_transition_duration
+    self.curvature_policy = curvature_policy or CurvatureSafetyPolicy()
+    self.last_geometry_report = GeometryValidationReport(())
     self._lineages: list["Lineage"] = []
     self._bundles:  list["Bundle"]  = []
     self._orbits:   list["Orbit"]   = []
@@ -132,9 +143,35 @@ class Diagram:
             for orbit in orbits_by_main[lineage]:
                 orbit.solve_geometry()
 
+    self.last_geometry_report = validate_compiled_geometry(self, self.curvature_policy)
+    if self.curvature_policy.mode == "reject" and not self.last_geometry_report.is_safe:
+      raise UnsafeNormalOffsetError(self.last_geometry_report.diagnostics)
+    if self.curvature_policy.mode == "warn" and not self.last_geometry_report.is_safe:
+      warnings.warn(
+        format_geometry_diagnostics(self.last_geometry_report.diagnostics),
+        RuntimeWarning,
+        stacklevel=2,
+      )
+
     # Sort by Z (ascending) to ensure correct layering.
     # Stable sort preserves topological/creation order for equal Z.
     return sorted(solve_order_lineages, key=lambda lineage: lineage.z)
+
+  def validate_geometry(self, policy: CurvatureSafetyPolicy | None = None) -> GeometryValidationReport:
+    """Compile and return curvature-safety diagnostics without requiring rendering."""
+    selected_policy = policy or CurvatureSafetyPolicy(mode="report")
+    original_policy = self.curvature_policy
+    self.curvature_policy = CurvatureSafetyPolicy(
+      mode="report",
+      max_offset_radius_fraction=selected_policy.max_offset_radius_fraction,
+      samples_per_curve=selected_policy.samples_per_curve,
+      x_order_tolerance=selected_policy.x_order_tolerance,
+    )
+    try:
+      self.compile()
+      return self.last_geometry_report
+    finally:
+      self.curvature_policy = original_policy
 
   def to_svg(self) -> str:
     """Compile the diagram and return the complete SVG document."""
