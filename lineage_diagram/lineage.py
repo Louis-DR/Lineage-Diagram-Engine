@@ -373,6 +373,8 @@ class Lineage(ScalablePath, ShiftablePath):
       - index: int (optional, for assembly)
       - z: float (optional, default 0.0)
     """
+    original_children_specs = list(children_specs)
+
     # Sort children specs by target_y (or index if in bundle)
     # If target_y is not present (e.g. in bundle), we might use index or default to 0
     # For independent, target_y is key.
@@ -385,16 +387,8 @@ class Lineage(ScalablePath, ShiftablePath):
             return spec['index']
         return 0
 
-    children_specs.sort(key=get_child_y)
-
     # 1. Get parent state at start_x
     parent_w = self.get_width_at(start_x)
-
-    # Let's calculate the layout relative to the parent's center.
-    children_target_widths = [spec['target_w'] for spec in children_specs]
-    children_start_widths, children_start_centers_relative = self._calculate_split_layout(
-      parent_w, 0, children_target_widths
-    )
 
     # We need to know if the parent is in a bundle at start_x
     parent_bundle = None
@@ -425,8 +419,40 @@ class Lineage(ScalablePath, ShiftablePath):
             spec['index'] = next_index
             next_index += index_step
 
+    is_orbit_split = (
+      parent_bundle is not None
+      and hasattr(parent_bundle, "main_lineage")
+      and all(spec.get('in_assembly') is parent_bundle for spec in children_specs)
+    )
+    if is_orbit_split:
+      original_order = {id(spec): index for index, spec in enumerate(original_children_specs)}
+
+      def orbit_layout_key(spec):
+        index = spec['index']
+        if index > 0:
+          # SVG top-to-bottom packing: upper members run outer to inner.
+          return (0, -index, original_order[id(spec)])
+        # Lower members run inner to outer. Equal indices use newest-inner.
+        return (1, abs(index), -original_order[id(spec)])
+
+      children_specs = sorted(children_specs, key=orbit_layout_key)
+    else:
+      children_specs.sort(key=get_child_y)
+
+    children_target_widths = [spec['target_w'] for spec in children_specs]
+    children_start_widths, children_start_centers_relative = self._calculate_split_layout(
+      parent_w, 0, children_target_widths
+    )
+    layout_by_spec = {
+      id(spec): (start_w, start_center_rel)
+      for spec, start_w, start_center_rel in zip(children_specs, children_start_widths, children_start_centers_relative)
+    }
+
     children = []
-    for spec, start_w, start_center_rel in zip(children_specs, children_start_widths, children_start_centers_relative):
+    children_by_spec = {}
+    creation_specs = original_children_specs if is_orbit_split else children_specs
+    for spec in creation_specs:
+      start_w, start_center_rel = layout_by_spec[id(spec)]
       color       = spec['color']
       target_w    = spec['target_w']
       in_assembly = spec.get('in_assembly')
@@ -485,6 +511,7 @@ class Lineage(ScalablePath, ShiftablePath):
         child.shift_to(start_x, split_to_x, target_y)
 
       children.append(child)
+      children_by_spec[id(spec)] = child
 
     # Handle parent leaving bundle if applicable
     if parent_bundle:
@@ -511,6 +538,8 @@ class Lineage(ScalablePath, ShiftablePath):
       # Independent split: terminate instantly to avoid overlap
       self.terminate_at(start_x)
 
+    if is_orbit_split:
+      return [children_by_spec[id(spec)] for spec in original_children_specs]
     return children
 
   @classmethod

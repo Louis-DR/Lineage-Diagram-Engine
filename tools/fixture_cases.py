@@ -199,6 +199,8 @@ def orbit_merge_split() -> EngineFixture:
   orbit = Orbit(diagram, main, 3)
   blue = Lineage.create_in_assembly(diagram, BLUE, 0, 5, orbit, -1)
   red = Lineage.create_in_assembly(diagram, RED, 0, 5, orbit, -1)
+  upper_blue = Lineage.create_in_assembly(diagram, BLUE, 0, 5, orbit, 1)
+  upper_red = Lineage.create_in_assembly(diagram, RED, 0, 5, orbit, 1)
   merged = Lineage.create_in_assembly_from_merge(
     diagram, "gray", 100, 150, 10, [blue, red], orbit, index=-1,
   )
@@ -206,11 +208,30 @@ def orbit_merge_split() -> EngineFixture:
     {"color": BLUE, "target_w": 5, "in_assembly": orbit, "index": -1},
     {"color": RED, "target_w": 5, "in_assembly": orbit, "index": -1},
   ])
+  upper_merged = Lineage.create_in_assembly_from_merge(
+    diagram, "gray", 100, 150, 10, [upper_blue, upper_red], orbit, index=1,
+  )
+  split_upper_blue, split_upper_red = upper_merged.split(200, 250, [
+    {"color": BLUE, "target_w": 5, "in_assembly": orbit, "index": 1},
+    {"color": RED, "target_w": 5, "in_assembly": orbit, "index": 1},
+  ])
   return EngineFixture(
     "orbit-merge-split",
     "Equal-index lower orbit members merge and split without crossing sides.",
     diagram,
-    {"main": main, "blue": blue, "red": red, "merged": merged, "split-blue": split_blue, "split-red": split_red},
+    {
+      "main": main,
+      "blue": blue,
+      "red": red,
+      "merged": merged,
+      "split-blue": split_blue,
+      "split-red": split_red,
+      "upper-blue": upper_blue,
+      "upper-red": upper_red,
+      "upper-merged": upper_merged,
+      "split-upper-blue": split_upper_blue,
+      "split-upper-red": split_upper_red,
+    },
     (100, 150, 200, 250),
   )
 

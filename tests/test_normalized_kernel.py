@@ -184,6 +184,8 @@ def test_orbit_merge_and_split_keep_lower_side_indices_and_newest_inner_tie_orde
   merged = fixture.lineages["merged"]
   split_blue = fixture.lineages["split-blue"]
   split_red = fixture.lineages["split-red"]
+  split_upper_blue = fixture.lineages["split-upper-blue"]
+  split_upper_red = fixture.lineages["split-upper-red"]
 
   reservations = [reservation for reservation in orbit._reservations if reservation.lineage is merged]
   assert reservations[0].index == -1
@@ -195,3 +197,17 @@ def test_orbit_merge_and_split_keep_lower_side_indices_and_newest_inner_tie_orde
 
   _, offsets = orbit._layout_at(250.001)
   assert offsets[split_red] > offsets[split_blue]
+  assert offsets[split_upper_blue] > offsets[split_upper_red]
+
+  fixture.diagram.compile()
+  main_y = fixture.lineages["main"].frame_at(200).center.imag
+  lower_start_distances = {
+    lineage: abs(lineage.frame_at(200).center.imag - main_y)
+    for lineage in (split_blue, split_red)
+  }
+  upper_start_distances = {
+    lineage: abs(lineage.frame_at(200).center.imag - main_y)
+    for lineage in (split_upper_blue, split_upper_red)
+  }
+  assert lower_start_distances[split_red] < lower_start_distances[split_blue]
+  assert upper_start_distances[split_upper_blue] > upper_start_distances[split_upper_red]
