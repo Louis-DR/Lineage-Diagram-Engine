@@ -114,8 +114,8 @@ def test_udr_split_composes_its_importance_transition(monkeypatch):
     split_from_x + 18,
     split_to_x,
   )]
-  assert sampled_widths == sorted(sampled_widths)
-  assert max(sampled_widths) == pytest.approx(importance_target)
+  assert sampled_widths == sorted(sampled_widths, reverse=True)
+  assert min(sampled_widths) == pytest.approx(importance_target)
   assert lineage.get_width_at(split_to_x) == pytest.approx(importance_target)
 
 

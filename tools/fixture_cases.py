@@ -127,7 +127,7 @@ def overcommitted_split_merge_widths() -> EngineFixture:
   )
   return EngineFixture(
     "overcommitted-split-merge-widths",
-    "Split and merge packets tile a width-20 container despite width-15 requests.",
+    "Split and merge preserve width-15 participants inside a width-20 container.",
     diagram,
     {"parent": parent, "upper": upper, "lower": lower, "merged": merged},
     (60, 160, 200, 300),

@@ -9,7 +9,7 @@ The test suite records confirmed defects as strict expected failures. Remove the
 
 ## Resolved Engine Defects
 
-ENG-001 through ENG-013 are covered by ordinary passing regression tests. The fixes introduce normalized scalar timelines, packet-conserving split/merge widths, curvature-safe normal-offset rejection, effective color sampling at relationship boundaries, segment-local independent geometry, stable topology memberships with transition reservations, whole-assembly reorder interpolation, lifecycle clipping, deterministic SVG IDs, and exact event-aware sampling.
+ENG-001 through ENG-013 are covered by ordinary passing regression tests. The fixes introduce normalized scalar timelines, overlap-aware split/merge widths, curvature-safe normal-offset rejection, effective color sampling at relationship boundaries, segment-local independent geometry, stable topology memberships with transition reservations, whole-assembly reorder interpolation, lifecycle clipping, deterministic SVG IDs, and exact event-aware sampling.
 
 ## Political Data
 

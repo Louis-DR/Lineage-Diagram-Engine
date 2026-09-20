@@ -137,12 +137,12 @@ def test_orbit_uses_main_independent_segment_geometry_during_transition():
   assert (satellite_upper + satellite_lower) / 2 == pytest.approx(expected_satellite_center)
 
 
-def test_split_and_merge_packet_helpers_allocate_exact_container_width():
+def test_split_and_merge_layouts_preserve_overcommitted_requested_widths():
   split_widths, split_centers = Lineage._calculate_split_layout(20, 80, [15, 15])
 
-  assert split_widths == pytest.approx([10, 10])
-  assert split_centers == pytest.approx([75, 85])
-  assert sum(split_widths) == pytest.approx(20)
+  assert split_widths == pytest.approx([15, 15])
+  assert split_centers == pytest.approx([77.5, 82.5])
+  assert sum(split_widths) == pytest.approx(30)
 
   unequal_widths, _ = Lineage._calculate_split_layout(24, 80, [3, 9])
   zero_widths, _ = Lineage._calculate_split_layout(20, 80, [0, 0])
@@ -150,7 +150,7 @@ def test_split_and_merge_packet_helpers_allocate_exact_container_width():
   assert zero_widths == pytest.approx([10, 10])
 
 
-def test_overcommitted_split_and_merge_packets_tile_their_container_edges():
+def test_overcommitted_split_and_merge_participants_overlap_inside_their_container():
   fixture = overcommitted_split_merge_widths()
   parent = fixture.lineages["parent"]
   upper = fixture.lineages["upper"]
@@ -170,12 +170,13 @@ def test_overcommitted_split_and_merge_packets_tile_their_container_edges():
     container_interval = interval(container)
     participant_intervals = sorted((interval(frame) for frame in participants), key=lambda item: item[0])
     assert participant_intervals[0][0] == pytest.approx(container_interval[0], abs=1e-3)
-    assert participant_intervals[0][1] == pytest.approx(participant_intervals[1][0], abs=1e-3)
     assert participant_intervals[1][1] == pytest.approx(container_interval[1], abs=1e-3)
-    assert sum(frame.width for frame in participants) == pytest.approx(container.width, abs=1e-3)
+    overlap = participant_intervals[0][1] - participant_intervals[1][0]
+    assert overlap == pytest.approx(10, abs=1e-3)
+    assert sum(frame.width for frame in participants) == pytest.approx(30, abs=1e-3)
 
 
-def test_continuing_split_and_merge_into_use_packet_conserving_widths():
+def test_continuing_split_and_merge_into_preserve_overcommitted_widths():
   diagram = Diagram(360, 160, resolution=120)
   parent = Lineage(diagram, "blue", 0, 80, 20)
   child = Lineage.create_split_from(
@@ -191,8 +192,8 @@ def test_continuing_split_and_merge_into_use_packet_conserving_widths():
   split_frames = [parent.frame_at(60), child.frame_at(60)]
   merge_frames = [source.frame_at(300, BoundarySide.LEFT), target.frame_at(300, BoundarySide.LEFT)]
 
-  assert sum(frame.width for frame in split_frames) == pytest.approx(20, abs=1e-3)
-  assert sum(frame.width for frame in merge_frames) == pytest.approx(20, abs=1e-3)
+  assert sum(frame.width for frame in split_frames) == pytest.approx(30, abs=1e-3)
+  assert sum(frame.width for frame in merge_frames) == pytest.approx(30, abs=1e-3)
 
 
 def test_tight_independent_normal_offset_warns_with_measured_context():

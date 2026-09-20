@@ -111,27 +111,40 @@ class Lineage(ScalablePath, ShiftablePath):
     )
 
   @staticmethod
-  def _calculate_packet_layout(
+  def _calculate_overlap_layout(
       container_width: float,
       container_center_y: float,
       requested_widths: list[float],
     ) -> tuple[list[float], list[float]]:
-    """Allocate participant widths that exactly tile one shared container."""
+    """Place split/merge participants within a container, preserving overcommit."""
     if not requested_widths:
       return [], []
 
     weights = [max(0.0, width) for width in requested_widths]
     total_weight = sum(weights)
     if total_weight == 0:
-      widths = [container_width / len(weights) for _ in weights]
+      slot_widths = [container_width / len(weights) for _ in weights]
     else:
-      widths = [container_width * weight / total_weight for weight in weights]
+      slot_widths = [container_width * weight / total_weight for weight in weights]
+
+    # Requested widths are a minimum at a split/merge frame. When their sum
+    # exceeds the container, keep them and let the clamped participants overlap.
+    widths = [min(container_width, max(width, slot_width)) for width, slot_width in zip(weights, slot_widths)]
 
     current_edge = container_center_y - container_width / 2
     centers = []
-    for width in widths:
-      centers.append(current_edge + width / 2)
-      current_edge += width
+    container_lower_edge = current_edge
+    container_upper_edge = container_center_y + container_width / 2
+    for slot_width, width in zip(slot_widths, widths):
+      center = current_edge + slot_width / 2
+      lower_edge = center - width / 2
+      upper_edge = center + width / 2
+      if lower_edge < container_lower_edge:
+        center += container_lower_edge - lower_edge
+      elif upper_edge > container_upper_edge:
+        center -= upper_edge - container_upper_edge
+      centers.append(center)
+      current_edge += slot_width
     return widths, centers
 
   @staticmethod
@@ -144,7 +157,7 @@ class Lineage(ScalablePath, ShiftablePath):
     ) -> tuple[list[float], list[float]]:
     """Calculate the target width and center Y for each parent at the merge point."""
     requested_widths = [parent.get_width_at(merge_from_x) for parent in parents]
-    return Lineage._calculate_packet_layout(start_w, start_y, requested_widths)
+    return Lineage._calculate_overlap_layout(start_w, start_y, requested_widths)
 
   @staticmethod
   def _calculate_split_layout(
@@ -153,7 +166,7 @@ class Lineage(ScalablePath, ShiftablePath):
       children_target_widths: list[float],
     ) -> tuple[list[float],list[float]]:
     """Calculate the start width and center Y for each child at the split point."""
-    return Lineage._calculate_packet_layout(parent_w, parent_center_y, children_target_widths)
+    return Lineage._calculate_overlap_layout(parent_w, parent_center_y, children_target_widths)
 
   @classmethod
   def create_from_merge(
