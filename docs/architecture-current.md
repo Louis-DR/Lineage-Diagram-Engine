@@ -44,7 +44,8 @@ Importing `politics_lib` exports the domain API without loading French data. `lo
 3. Apply merge, split, and position events.
 4. Apply federation memberships.
 5. Apply party satellite memberships.
-6. Generate SVG and rewrite the file to insert overlays.
+6. Project political alliances into post-layout Regions.
+7. Generate SVG and rewrite the file to insert overlays.
 
 The ordering means topology events do not reliably see federation or satellite state that was historically active at the same date.
 

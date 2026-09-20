@@ -880,6 +880,10 @@ class Lineage(ScalablePath, ShiftablePath):
           return assembly
     return None
 
+  def layout_parent_at(self, x: float, side: BoundarySide = BoundarySide.RIGHT):
+    """Return the authoritative stable Bundle or Orbit at a coordinate."""
+    return self._assembly_at(x, side)
+
   def frame_at(self, x: float, side: BoundarySide = BoundarySide.RIGHT) -> LineageFrame:
     """Return the authoritative geometric frame at a timeline coordinate."""
     if x < self.start_x or (self.end_x is not None and x > self.end_x):

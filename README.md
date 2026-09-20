@@ -2,17 +2,18 @@
 
 This repository contains a Python engine for drawing variable-width lineage diagrams over a horizontal timeline and an incomplete database of French political history.
 
-The engine supports independent ribbons, bundles, satellites orbiting another ribbon, width and position transitions, color transitions, splitting, merging, branching, reordering, and transfers between assemblies. Width is intended to represent perpendicular geometric thickness through curves.
+The engine supports independent ribbons, bundles, satellites orbiting another ribbon, width and position transitions, color transitions, splitting, merging, branching, reordering, transfers between assemblies, and post-layout Regions around changing groups. Width is intended to represent perpendicular geometric thickness through curves.
 
-The political projection maps parties to lineages, federations to bundles, and selected party relationships to orbits. The political loader is currently blocked by circular imports and is being migrated to an order-independent data model.
+The political projection maps parties to lineages, federations to bundles, selected party relationships to orbits, and political alliances to Regions. The political data is loaded through an order-independent two-pass loader.
 
 ## Status
 
-The standalone engine example renders, but several feature combinations have known geometry defects. The political renderer does not currently run. See:
+The standalone and political examples render. Unsafe perpendicular offsets are reported by the configured curvature policy. See:
 
 - `docs/known-defects.md`
 - `docs/geometry-contract.md`
 - `docs/political-inventory.md`
+- `docs/regions.md`
 
 ## Development
 

@@ -62,4 +62,4 @@ The current diagnostic seam tolerance is `1e-3` diagram units.
 
 ## Regions
 
-Alliances and similar annotations are post-layout regions. Adding or removing a region must not change lineage geometry. Region components may split when active members are disconnected; the final connected-component policy remains a product decision.
+Alliances and similar annotations are post-layout Regions. Adding or removing a Region must not change lineage geometry or sampling. A Region forms one vertically spanning envelope around all active targets, with Y padding measured from rendered lineage edges. A lineage target inside a Bundle or Orbit resolves to that whole immediate structure and returns to individual geometry when it leaves. Membership changes have explicit left and right envelopes at the event coordinate; optional event-corner rounding is local to that boundary. Empty membership intervals split the rendered Region into separate components.

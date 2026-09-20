@@ -125,6 +125,7 @@ def diagnose_fixture(
   names = {lineage: name for name, lineage in fixture.lineages.items()}
   violations = []
   lineage_reports = {}
+  region_reports = {}
   assemblies = [*fixture.diagram._bundles, *fixture.diagram._orbits]
 
   cycles = _dependency_cycles(fixture.diagram)
@@ -137,6 +138,7 @@ def diagnose_fixture(
       "view": [fixture.diagram.view_width, fixture.diagram.view_height],
       "event_xs": list(fixture.event_xs),
       "lineages": {},
+      "regions": {},
       "violations": violations,
       "summary": {"violation_count": len(violations), "by_kind": {"dependency-cycle": len(violations)}},
     }
@@ -418,6 +420,109 @@ def diagnose_fixture(
             "count": active,
           })
 
+  for region in fixture.diagram._regions:
+    component_reports = []
+    sampled_xs = []
+    for component_index, component in enumerate(region.components):
+      points = list(component.points)
+      sampled_xs.extend(point.x for point in points)
+      for point_index, point in enumerate(points):
+        if not all(math.isfinite(value) for value in (point.x, point.upper_y, point.lower_y)):
+          violations.append({
+            "kind": "non-finite-region-coordinate",
+            "region": region.id,
+            "component": component_index,
+            "point": point_index,
+            "value": [repr(point.x), repr(point.upper_y), repr(point.lower_y)],
+          })
+          continue
+        if point.upper_y > point.lower_y:
+          violations.append({
+            "kind": "inverted-region-envelope",
+            "region": region.id,
+            "component": component_index,
+            "point": point_index,
+            "x": point.x,
+            "upper_y": point.upper_y,
+            "lower_y": point.lower_y,
+          })
+        if point_index and point.x < points[point_index - 1].x - backtrack_tolerance:
+          violations.append({
+            "kind": "region-x-backtrack",
+            "region": region.id,
+            "component": component_index,
+            "point": point_index,
+            "from_x": points[point_index - 1].x,
+            "to_x": point.x,
+          })
+
+        expected = region._bounds_at(point.x, point.side)
+        if expected is None:
+          violations.append({
+            "kind": "region-envelope-without-members",
+            "region": region.id,
+            "component": component_index,
+            "point": point_index,
+            "x": point.x,
+          })
+        else:
+          error = max(abs(point.upper_y - expected[0]), abs(point.lower_y - expected[1]))
+          if error > seam_tolerance:
+            violations.append({
+              "kind": "region-containment-error",
+              "region": region.id,
+              "component": component_index,
+              "point": point_index,
+              "x": point.x,
+              "error": error,
+            })
+
+      polygon = [
+        *[complex(point.x, point.upper_y) for point in points],
+        *[complex(point.x, point.lower_y) for point in reversed(points)],
+      ]
+      if check_self_intersections and polygon:
+        intersection = _first_self_intersection(polygon)
+        if intersection is not None:
+          violations.append({
+            "kind": "region-self-intersection",
+            "region": region.id,
+            "component": component_index,
+            "edges": list(intersection),
+          })
+      component_reports.append({
+        "point_count": len(points),
+        "min_x": min((point.x for point in points), default=None),
+        "max_x": max((point.x for point in points), default=None),
+      })
+
+    membership_boundaries = sorted({
+      value
+      for membership in region.memberships
+      for value in (
+        membership.start_x,
+        membership.end_x if membership.end_x is not None else fixture.diagram.view_width,
+      )
+      if (
+        region._bounds_at(value, BoundarySide.LEFT) is not None
+        or region._bounds_at(value, BoundarySide.RIGHT) is not None
+      )
+    })
+    for boundary in membership_boundaries:
+      nearest_error = min((abs(sampled_x - boundary) for sampled_x in sampled_xs), default=math.inf)
+      if nearest_error > 1e-6:
+        violations.append({
+          "kind": "region-event-boundary-missing",
+          "region": region.id,
+          "x": boundary,
+          "nearest_error": nearest_error if math.isfinite(nearest_error) else None,
+        })
+    region_reports[region.id] = {
+      "component_count": len(region.components),
+      "components": component_reports,
+      "required_geometry_xs": membership_boundaries,
+    }
+
   counts = {}
   for violation in violations:
     kind = violation["kind"]
@@ -429,6 +534,7 @@ def diagnose_fixture(
     "view": [fixture.diagram.view_width, fixture.diagram.view_height],
     "event_xs": list(fixture.event_xs),
     "lineages": lineage_reports,
+    "regions": region_reports,
     "violations": violations,
     "summary": {"violation_count": len(violations), "by_kind": counts},
   }

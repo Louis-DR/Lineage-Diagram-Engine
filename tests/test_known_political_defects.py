@@ -1,9 +1,12 @@
 import importlib
 import sys
+from types import SimpleNamespace
 
 import pytest
 
 import politics_lib
+from lineage_diagram.diagram import Diagram
+from lineage_diagram.lineage import Lineage
 from politics_lib import load_france
 from politics_lib.date import Date
 from lineage_diagram.paths import MembershipEventType
@@ -117,6 +120,38 @@ def test_udr_split_composes_its_importance_transition(monkeypatch):
   assert sampled_widths == sorted(sampled_widths, reverse=True)
   assert min(sampled_widths) == pytest.approx(importance_target)
   assert lineage.get_width_at(split_to_x) == pytest.approx(importance_target)
+
+
+def test_political_alliance_intervals_project_to_regions():
+  import render_political_diagram as renderer
+
+  diagram = Diagram(renderer.DIAGRAM_WIDTH, renderer.DIAGRAM_HEIGHT, resolution=40)
+  party = object()
+  lineage = Lineage(diagram, "red", renderer.date_to_x(Date(2000)), 100, 10)
+  lineage.terminate_at(renderer.date_to_x(Date(2020)))
+  lineage.visual_end_x = renderer.date_to_x(Date(2010))
+  alliance = SimpleNamespace(
+    color="#336699",
+    creation_date=Date(1995),
+    dissolution_date=Date(2015),
+    membership_intervals=[{
+      "party": party,
+      "from": Date(2005),
+      "to": None,
+    }],
+  )
+
+  regions = renderer.add_alliance_regions(
+    diagram,
+    {"TEST": alliance},
+    {"PARTY": [lineage]},
+    {party: "PARTY"},
+  )
+
+  membership = regions["TEST"].memberships[0]
+  assert membership.target is lineage
+  assert membership.start_x == renderer.date_to_x(Date(2005))
+  assert membership.end_x == renderer.date_to_x(Date(2010))
 
 
 @pytest.mark.xfail(raises=NameError, reason="The monolithic database references an entity before definition")

@@ -7,6 +7,7 @@ from lineage_diagram.lineage import Lineage
 from lineage_diagram.bundle import Bundle
 from lineage_diagram.orbit import Orbit
 from lineage_diagram.paths import MembershipEventType, ScaleEvent
+from lineage_diagram.region import Region, RegionStroke
 from lineage_diagram.timeline import NumericTimeline
 
 # Diagram configuration
@@ -65,6 +66,14 @@ FEDERATION_LEAVE_TRANSITION_DAYS   = 160
 SATELLITE_ORBIT_MARGIN             = 2.0
 SATELLITE_JOIN_TRANSITION_DAYS     = 160
 SATELLITE_LEAVE_TRANSITION_DAYS    = 160
+
+ALLIANCE_REGION_PADDING      = 4.0
+ALLIANCE_REGION_OPACITY      = 0.14
+ALLIANCE_REGION_CORNER       = 4.0
+ALLIANCE_REGION_EVENT_CORNER = 2.0
+ALLIANCE_REGION_STROKE_WIDTH = 1.0
+ALLIANCE_REGION_STROKE_ALPHA = 0.65
+ALLIANCE_REGION_DASHARRAY    = (5.0, 3.0)
 
 # Relative-position decision threshold for end_at_lineage based on political orientation
 ORIENTATION_EDGE_DELTA = 0.03  # If abs(source - target) <= this => center; else upper/lower
@@ -184,6 +193,63 @@ def importance_at(party: db.PoliticalParty, at_date: db.Date) -> float:
            + float(components.get("european",     0.0))
            + bonus)
   return float(db.IMPORTANCE_MULTIPLIER * pow(total, db.IMPORTANCE_POWER))
+
+
+def add_alliance_regions(
+  diagram: Diagram,
+  alliances: dict,
+  party_lineages: dict[str, list[Lineage]],
+  symbol_by_party: dict,
+) -> dict[str, Region]:
+  """Project political alliance intervals into post-layout engine Regions."""
+  regions = {}
+  for alliance_symbol in sorted(alliances):
+    alliance = alliances[alliance_symbol]
+    color = getattr(alliance, "color", None) or "#808080"
+    region = Region(
+      diagram,
+      padding=ALLIANCE_REGION_PADDING,
+      fill=color,
+      fill_opacity=ALLIANCE_REGION_OPACITY,
+      corner_radius=ALLIANCE_REGION_CORNER,
+      event_corner_radius=ALLIANCE_REGION_EVENT_CORNER,
+      stroke=RegionStroke(
+        color,
+        ALLIANCE_REGION_STROKE_WIDTH,
+        ALLIANCE_REGION_STROKE_ALPHA,
+        ALLIANCE_REGION_DASHARRAY,
+      ),
+    )
+    regions[alliance_symbol] = region
+    alliance_end_x = (
+      date_to_x(alliance.dissolution_date)
+      if getattr(alliance, "dissolution_date", None)
+      else diagram.view_width
+    )
+    for interval in getattr(alliance, "membership_intervals", ()):
+      party = interval.get("party")
+      symbol = symbol_by_party.get(party)
+      if symbol is None:
+        continue
+      interval_start = interval.get("from")
+      if interval_start is None:
+        continue
+      interval_start_x = max(date_to_x(interval_start), date_to_x(alliance.creation_date))
+      interval_end_x = min(
+        date_to_x(interval["to"]) if interval.get("to") else diagram.view_width,
+        alliance_end_x,
+      )
+      for lineage in party_lineages.get(symbol, ()):
+        start_x = max(interval_start_x, lineage.start_x)
+        visual_end_x = lineage.visual_end_x if lineage.visual_end_x is not None else diagram.view_width
+        end_x = min(
+          interval_end_x,
+          lineage.end_x if lineage.end_x is not None else diagram.view_width,
+          visual_end_x,
+        )
+        if end_x > start_x:
+          region.add_member(lineage, start_x, end_x)
+  return regions
 
 
 class PoliticalDiagram(Diagram):
@@ -1061,6 +1127,13 @@ def main():
                           if leave_to_x - leave_from_x > SHIFT_MIN_SEGMENT_EPS:
                                 target_y = orientation_to_y(float(satellite_party.get_political_position_at(to_date)))
                                 lineage_for_leave.leave(leave_from_x, leave_to_x, orbit, target_y)
+
+  add_alliance_regions(
+    diagram,
+    system.political_alliances,
+    party_lineages,
+    symbol_by_party,
+  )
 
   diagram.generate("political_diagram.svg")
   return diagram

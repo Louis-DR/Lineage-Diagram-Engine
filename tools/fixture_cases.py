@@ -5,6 +5,7 @@ from lineage_diagram.bundle import Bundle
 from lineage_diagram.diagram import Diagram
 from lineage_diagram.lineage import Lineage
 from lineage_diagram.orbit import Orbit
+from lineage_diagram.region import Region, RegionHatch, RegionStroke
 
 
 BLUE = "#4682b4"
@@ -428,6 +429,35 @@ def color_transition() -> EngineFixture:
   )
 
 
+def dynamic_region() -> EngineFixture:
+  diagram = _diagram()
+  upper = Lineage(diagram, BLUE, 0, 55, 14)
+  lower = Lineage(diagram, RED, 0, 110, 18)
+  upper.shift_to(180, 250, 35)
+  upper.scale_to(260, 320, 26)
+  region = Region(
+    diagram,
+    padding=7,
+    fill="#7c3aed",
+    fill_opacity=0.16,
+    corner_radius=6,
+    event_corner_radius=4,
+    stroke=RegionStroke("#5b21b6", 1.25, 0.8, (5, 3)),
+    hatch=RegionHatch("#5b21b6", 0.12, 1, 9, 35),
+  )
+  region.add_member(upper, 30, 330)
+  region.add_member(lower, 120, 280)
+  region.shade(210, 290, "#db2777")
+  region.fade(230, 310, 0.08)
+  return EngineFixture(
+    "dynamic-region",
+    "A styled Region follows geometry and changes membership at exact event coordinates.",
+    diagram,
+    {"upper": upper, "lower": lower},
+    (30, 120, 180, 210, 230, 250, 260, 280, 290, 310, 320, 330),
+  )
+
+
 def tight_independent_normal_offset() -> EngineFixture:
   diagram = _diagram()
   lineage = Lineage(diagram, RED, 0, 30, 40)
@@ -510,6 +540,7 @@ FIXTURE_BUILDERS: tuple[Callable[[], EngineFixture], ...] = (
   staggered_bundle_joins,
   staggered_orbit_joins,
   orbit_merge_split,
+  dynamic_region,
   tight_independent_normal_offset,
   safe_independent_normal_offset,
   tight_bundle_outer_normal_offset,

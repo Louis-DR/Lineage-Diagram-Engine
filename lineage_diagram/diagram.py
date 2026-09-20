@@ -15,6 +15,7 @@ if TYPE_CHECKING:
   from .lineage import Lineage
   from .bundle  import Bundle
   from .orbit   import Orbit
+  from .region  import Region
 
 class Diagram:
   """
@@ -45,6 +46,7 @@ class Diagram:
     self._lineages: list["Lineage"] = []
     self._bundles:  list["Bundle"]  = []
     self._orbits:   list["Orbit"]   = []
+    self._regions:  list["Region"]  = []
 
   def add_lineage(self, lineage:"Lineage"):
     """Register a lineage to the diagram."""
@@ -60,6 +62,11 @@ class Diagram:
     """Register an orbit to the diagram."""
     orbit.id = f"orbit-{len(self._orbits)}"
     self._orbits.append(orbit)
+
+  def add_region(self, region:"Region"):
+    """Register a post-layout Region annotation."""
+    region.id = f"region-{len(self._regions)}"
+    self._regions.append(region)
 
   def _lineage_by_id(self, lineage_id: str) -> "Lineage":
     try:
@@ -153,6 +160,9 @@ class Diagram:
         stacklevel=2,
       )
 
+    for region in self._regions:
+      region.compile()
+
     # Sort by Z (ascending) to ensure correct layering.
     # Stable sort preserves topological/creation order for equal Z.
     return sorted(solve_order_lineages, key=lambda lineage: lineage.z)
@@ -177,6 +187,9 @@ class Diagram:
     """Compile the diagram and return the complete SVG document."""
     draw_order_lineages = self.compile()
     svg_lines = []
+
+    for region in sorted(self._regions, key=lambda item: item.z):
+        svg_lines.append(region.draw())
 
     for lineage in draw_order_lineages:
         svg_lines.append(lineage.draw())
