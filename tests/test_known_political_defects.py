@@ -91,6 +91,34 @@ def test_political_transfer_releases_the_previous_assembly_slot(monkeypatch):
   assert lineage.state_at(orbit_join.to_x + 1).assembly_id == orbit_join.assembly.id
 
 
+def test_udr_split_composes_its_importance_transition(monkeypatch):
+  import render_political_diagram as renderer
+
+  monkeypatch.setattr(renderer.PoliticalDiagram, "generate", lambda self, path: None)
+  diagram = renderer.main()
+  system = load_france()
+  udr = next(party for party in system.political_parties.values() if party.symbol == "UDR")
+  split_from_x = renderer.date_to_x(udr.creation_date)
+  split_to_x = split_from_x + renderer.SECEDE_TRANSITION_DAYS * renderer.DIAGRAM_DATE_SCALE
+  importance_target = float(udr.get_importance_changes()[0]["to_importance"])
+  lineage = next(
+    lineage for lineage in diagram._lineages
+    if abs(lineage.start_x - split_from_x) < 1e-6
+    and lineage.membership_events
+  )
+
+  sampled_widths = [lineage.get_width_at(x) for x in (
+    split_from_x,
+    split_from_x + 6,
+    split_from_x + 12,
+    split_from_x + 18,
+    split_to_x,
+  )]
+  assert sampled_widths == sorted(sampled_widths)
+  assert max(sampled_widths) == pytest.approx(importance_target)
+  assert lineage.get_width_at(split_to_x) == pytest.approx(importance_target)
+
+
 @pytest.mark.xfail(raises=NameError, reason="The monolithic database references an entity before definition")
 def test_legacy_political_database_imports():
   try:

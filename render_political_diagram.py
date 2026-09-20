@@ -6,7 +6,8 @@ from lineage_diagram.diagram import Diagram
 from lineage_diagram.lineage import Lineage
 from lineage_diagram.bundle import Bundle
 from lineage_diagram.orbit import Orbit
-from lineage_diagram.paths import MembershipEventType
+from lineage_diagram.paths import MembershipEventType, ScaleEvent
+from lineage_diagram.timeline import NumericTimeline
 
 # Diagram configuration
 DIAGRAM_WIDTH  = 8650*1.5
@@ -118,12 +119,46 @@ def apply_importance_changes_to_lineage(
   lineage: Lineage,
   party: db.PoliticalParty,
   min_x: Optional[float] = None,
-  max_x: Optional[float] = None
+  max_x: Optional[float] = None,
+  compose_until_x: Optional[float] = None,
 ) -> None:
   """
   Applies importance-based width changes to a lineage using the party's importance history.
   """
-  for change in party.get_importance_changes():
+  changes = party.get_importance_changes()
+  if compose_until_x is not None and min_x is not None and compose_until_x > min_x:
+    overlapping_changes = [
+      change for change in changes
+      if date_to_x(change["from_date"]) < compose_until_x
+      and date_to_x(change["to_date"]) > min_x
+    ]
+    if overlapping_changes:
+      # A split allocates the parent's width at its start, while importance is
+      # an authoritative political value. Compose them into one split target
+      # instead of temporarily interrupting, then resuming, the allocation.
+      importance_events = [
+        ScaleEvent(
+          date_to_x(change["from_date"]),
+          date_to_x(change["to_date"]),
+          float(change["to_importance"]),
+        )
+        for change in changes
+      ]
+      effective_target = NumericTimeline(
+        importance_at(party, party.creation_date),
+        importance_events,
+        "to_w",
+      ).value_at(compose_until_x)
+      split_scale = next((
+        event for event in reversed(lineage._scale_events)
+        if abs(event.from_x - min_x) < 1e-6
+        and abs(event.to_x - compose_until_x) < 1e-6
+      ), None)
+      if split_scale is not None:
+        split_scale.to_w = effective_target
+        min_x = compose_until_x
+
+  for change in changes:
     change_from_x = date_to_x(change["from_date"])
     change_to_x = date_to_x(change["to_date"])
     target_w = float(change["to_importance"])
@@ -787,7 +822,12 @@ def main():
                         sec_child.terminate_at(end_x)
 
         for symbol, lineage in newly_created_lineages:
-            apply_importance_changes_to_lineage(lineage, by_symbol[symbol], min_x=from_x)
+            apply_importance_changes_to_lineage(
+                lineage,
+                by_symbol[symbol],
+                min_x=from_x,
+                compose_until_x=to_x,
+            )
         newly_created_lineages = []
 
     elif evt["type"] == "y_shift":
