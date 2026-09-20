@@ -31,6 +31,18 @@ def _segments_intersect(a: complex, b: complex, c: complex, d: complex) -> bool:
   )
 
 
+def _point_segment_distance(point: complex, first: complex, second: complex) -> float:
+  span = second - first
+  if abs(span) <= 1e-12:
+    return abs(point - first)
+  ratio = (
+    (point.real - first.real) * span.real
+    + (point.imag - first.imag) * span.imag
+  ) / (abs(span) ** 2)
+  ratio = max(0.0, min(1.0, ratio))
+  return abs(point - (first + span * ratio))
+
+
 def _first_self_intersection(points: list[complex]) -> tuple[int, int] | None:
   if len(points) < 4:
     return None
@@ -303,9 +315,10 @@ def diagnose_fixture(
       assembly = segment.bundle
       cached_samples = [
         sample for sample in assembly._compiled_member_samples.get(lineage, ())
-        if segment.start_x <= sample[0] <= segment.end_x
+        if segment.start_x <= sample.source_x <= segment.end_x
       ]
-      for sample_x, top, bottom in cached_samples:
+      for sample in cached_samples:
+        sample_x, top, bottom = sample.source_x, sample.upper, sample.lower
         memberships = [
           membership for membership in assembly.get_memberships_at(sample_x)
           if membership.lineage is lineage
@@ -423,6 +436,7 @@ def diagnose_fixture(
   for region in fixture.diagram._regions:
     component_reports = []
     sampled_xs = []
+    minimum_clearance = math.inf
     for component_index, component in enumerate(region.components):
       points = list(component.points)
       sampled_xs.extend(point.x for point in points)
@@ -456,8 +470,13 @@ def diagnose_fixture(
             "to_x": point.x,
           })
 
-        expected = region._bounds_at(point.x, point.side)
-        if expected is None:
+        active_lineages = {}
+        for membership in region.memberships:
+          if not region._membership_active(membership, point.x, point.side):
+            continue
+          for lineage in region._target_lineages(membership.target, point.x, point.side):
+            active_lineages[lineage.id] = lineage
+        if not active_lineages:
           violations.append({
             "kind": "region-envelope-without-members",
             "region": region.id,
@@ -466,16 +485,62 @@ def diagnose_fixture(
             "x": point.x,
           })
         else:
-          error = max(abs(point.upper_y - expected[0]), abs(point.lower_y - expected[1]))
-          if error > seam_tolerance:
-            violations.append({
-              "kind": "region-containment-error",
-              "region": region.id,
-              "component": component_index,
-              "point": point_index,
-              "x": point.x,
-              "error": error,
-            })
+          for boundary_name, boundary_point in (
+              ("upper", complex(point.x, point.upper_y)),
+              ("lower", complex(point.x, point.lower_y)),
+            ):
+            nearest = None
+            for lineage in active_lineages.values():
+              samples = lineage._compiled_samples
+              discontinuities = {
+                second.source_x
+                for first, second in zip(samples, samples[1:])
+                if abs(first.source_x - second.source_x) <= 1e-9
+                and (
+                  abs(first.upper - second.upper) > 1e-9
+                  or abs(first.lower - second.lower) > 1e-9
+                )
+              }
+              edges = []
+              for first, second in zip(samples, samples[1:]):
+                if (
+                    abs(first.source_x - second.source_x) <= 1e-9
+                    and second.source_x in discontinuities
+                  ):
+                  continue
+                if point.x in discontinuities:
+                  if point.side == BoundarySide.LEFT and min(first.source_x, second.source_x) >= point.x:
+                    continue
+                  if point.side == BoundarySide.RIGHT and max(first.source_x, second.source_x) <= point.x:
+                    continue
+                edges.extend(((first.upper, second.upper), (first.lower, second.lower)))
+              if samples:
+                edges.extend((
+                  (samples[0].upper, samples[0].lower),
+                  (samples[-1].upper, samples[-1].lower),
+                ))
+              for first, second in edges:
+                distance = _point_segment_distance(boundary_point, first, second)
+                candidate = (distance, lineage.id)
+                if nearest is None or candidate < nearest:
+                  nearest = candidate
+            if nearest is None:
+              continue
+            minimum_clearance = min(minimum_clearance, nearest[0])
+            error = region._clearance - nearest[0]
+            if error > max(seam_tolerance, 2e-2):
+              violations.append({
+                "kind": "region-clearance-error",
+                "region": region.id,
+                "component": component_index,
+                "point": point_index,
+                "lineage": nearest[1],
+                "boundary": boundary_name,
+                "x": point.x,
+                "required_clearance": region._clearance,
+                "measured_clearance": nearest[0],
+                "error": error,
+              })
 
       polygon = [
         *[complex(point.x, point.upper_y) for point in points],
@@ -521,6 +586,7 @@ def diagnose_fixture(
       "component_count": len(region.components),
       "components": component_reports,
       "required_geometry_xs": membership_boundaries,
+      "minimum_clearance": minimum_clearance if math.isfinite(minimum_clearance) else None,
     }
 
   counts = {}

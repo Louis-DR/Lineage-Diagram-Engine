@@ -5,12 +5,13 @@ from .segments import IndependentSegment, DependentSegment
 from .utils      import smootherstep, find_t_at_x
 from .timeline   import BoundarySide, PositionTimeline
 from .timeline   import ColorTimeline, NumericTimeline
-from .layout     import LineageFrame, LineageState
+from .layout     import CompiledRibbonSample, LineageFrame, LineageState
 
 if TYPE_CHECKING:
   from .diagram import Diagram
   from .bundle  import Bundle
   from .orbit   import Orbit
+  from .region  import Region, RegionMembership
 
 class Lineage(ScalablePath, ShiftablePath):
   """
@@ -44,6 +45,7 @@ class Lineage(ScalablePath, ShiftablePath):
 
     # Computed segments
     self._computed_segments = []
+    self._compiled_samples: tuple[CompiledRibbonSample, ...] = ()
 
     # Internal state for compilation
     self._initial_bundle = None
@@ -746,6 +748,14 @@ class Lineage(ScalablePath, ShiftablePath):
     """Transition lineage color to new color over X range."""
     self._shade_events.append(ShadeEvent(from_x, to_x, color))
 
+  def join_region(self, region: "Region", x: float) -> "RegionMembership":
+    """Join a post-layout Region without changing lineage layout."""
+    return region.join(self, x)
+
+  def leave_region(self, region: "Region", x: float) -> None:
+    """Leave a post-layout Region without changing lineage layout."""
+    region.leave(self, x)
+
   def join(self, from_x:float, to_x:float, to_assembly:"Bundle | Orbit", index:int=-1):
     """Join assembly over a transition X range."""
     to_assembly.validate_member_index(index, allow_append=True)
@@ -962,6 +972,7 @@ class Lineage(ScalablePath, ShiftablePath):
   def compile_segments(self):
     """Converts events into geometry segments."""
     self._computed_segments = []
+    self._compiled_samples = ()
     # Sort events by time
     self.membership_events.sort(key=lambda membership_event: membership_event.from_x)
     current_x = self.start_x
@@ -1341,16 +1352,21 @@ class Lineage(ScalablePath, ShiftablePath):
       self.shade(end_x - fade_duration, end_x, target_lineage._color_at(end_x))
     self.terminate_at(end_x)
 
+  def compile_geometry(self) -> tuple[CompiledRibbonSample, ...]:
+    """Materialize the paired samples consumed by drawing and annotations."""
+    samples = []
+    for segment in self._computed_segments:
+      samples.extend(segment.compile_samples())
+    self._compiled_samples = tuple(samples)
+    return self._compiled_samples
+
   def draw(self):
     """Draw the SVG path of the lineage."""
     shape_path_d = ""
-    upper_points = []
-    lower_points = []
-    # Gather points from all compiled segments
-    for segment in self._computed_segments:
-      segment_upper_points, segment_lower_points = segment.compile()
-      upper_points.extend(segment_upper_points)
-      lower_points.extend(segment_lower_points)
+    if not self._compiled_samples:
+      self.compile_geometry()
+    upper_points = [sample.upper for sample in self._compiled_samples]
+    lower_points = [sample.lower for sample in self._compiled_samples]
 
     if not upper_points: return ""
 
@@ -1397,7 +1413,10 @@ class Lineage(ScalablePath, ShiftablePath):
 
     stroke = 'stroke="none"'
     if self.diagram.lineage_stroke_width != 0:
-      stroke = f'stroke="{fill_attr}" stroke-width="{self.diagram.lineage_stroke_width}"'
+      stroke = (
+        f'stroke="{fill_attr}" stroke-width="{self.diagram.lineage_stroke_width}" '
+        'stroke-linejoin="round"'
+      )
 
     shape_path_svg += f'<path id="{self.id}" fill="{fill_attr}" {stroke} d="{shape_path_d}"/>'
     return shape_path_svg

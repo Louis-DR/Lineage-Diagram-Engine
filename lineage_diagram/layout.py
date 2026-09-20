@@ -1,6 +1,8 @@
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
+from .timeline import BoundarySide
+
 if TYPE_CHECKING:
   from .bundle import Bundle
   from .orbit import Orbit
@@ -25,3 +27,13 @@ class LineageState:
   width: float
   color: str
   assembly_id: str | None
+
+
+@dataclass(frozen=True)
+class CompiledRibbonSample:
+  """One paired rendered-edge sample at an authoritative timeline X."""
+
+  source_x: float
+  upper: complex
+  lower: complex
+  side: BoundarySide = BoundarySide.RIGHT

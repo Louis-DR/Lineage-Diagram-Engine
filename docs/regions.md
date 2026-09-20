@@ -15,27 +15,30 @@ region = Region(
   stroke=RegionStroke("#312e81", width=1.5, dasharray=(6, 3)),
   hatch=RegionHatch("#312e81", opacity=0.15, spacing=8, angle=45),
 )
-region.join(lineage, 100)
-region.join(bundle, 180)
-region.leave(lineage, 260)
+lineage.join_region(region, 100)
+bundle.join_region(region, 180)
+lineage.leave_region(region, 260)
 region.shade(300, 360, "#db2777")
 region.fade(300, 360, 0.08)
 ```
 
-Membership intervals are half-open. `add_member(target, start_x, end_x)` can be used when both boundaries are known.
+Membership intervals are half-open. `add_member(target, start_x, end_x)` can be used when both boundaries are known. The reciprocal `region.join(target, x)` and `region.leave(target, x)` forms remain supported. `Lineage.join()` and `Lineage.leave()` are reserved for geometry-changing assembly transitions and are not overloaded for Regions.
 
 ## Geometry
 
 - Region geometry is compiled after every ribbon and rendered behind ribbons.
-- Padding is measured vertically from the rendered upper and lower lineage edges. It does not extend membership intervals along timeline X.
+- Padding is Euclidean clearance from the rendered ribbon fill plus half of the visible lineage stroke. On a sloped or rapidly scaling edge, the Region follows the parallel offset instead of applying a vertical shift.
+- Padding does not extend membership intervals along timeline X. Component starts and ends remain at their exact authored coordinates.
 - All active targets contribute to one vertically spanning envelope.
 - A lineage inside a Bundle or Orbit resolves to that whole immediate structure. It returns to individual geometry when it leaves.
 - Join and leave coordinates have explicit left and right envelopes. They produce a local vertical boundary instead of a hull extending back to an earlier event.
-- `event_corner_radius` rounds that local boundary and therefore permits a small visual bleed around its exact coordinate. Set it to zero for a hard step. Corner radii are clamped to the available padding so rounding cannot cut into a member ribbon.
+- `corner_radius` rounds component caps and genuine sharp envelope-source changes. Dense samples along a smooth curve are not treated as corners.
+- `event_corner_radius` rounds only changed sides of a local membership boundary and therefore permits a small visual taper around its exact coordinate. Set it to zero for a hard step. Effective radii are independent of sampling resolution and are reduced only when a short contour run or containment requires it.
+- A rounded hard-X cap can consume up to its effective radius from the local padding. The radius is clamped to the configured padding so the taper does not extend through the active ribbon; use a zero radius when the full clearance must remain visible at the exact membership cut.
 - An interval with no active targets closes the current component. Later membership starts another SVG component.
 - Immediate assembly promotion is supported. Recursive nested-assembly region composition is not yet modeled.
 
-Region sampling is private. Adding or removing a Region does not add ribbon samples or change lineage path data.
+Regions consume the same cached, source-X-aware rendered samples as lineage drawing. Adding or removing a Region does not add ribbon samples or change lineage path data.
 
 ## Styling
 

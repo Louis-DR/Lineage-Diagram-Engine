@@ -8,10 +8,13 @@ from .paths      import ShiftablePath, ShiftEvent
 from .utils      import find_t_at_x, smootherstep
 from .sampling   import diagram_event_xs
 from .topology   import AssemblyReservation, ReorderTransition, reservation_overlap_component
+from .layout     import CompiledRibbonSample
+from .timeline   import BoundarySide
 
 if TYPE_CHECKING:
   from .diagram import Diagram
   from .lineage import Lineage
+  from .region import Region, RegionMembership
 
 @dataclass
 class BundleMembership:
@@ -52,7 +55,7 @@ class Bundle(ShiftablePath):
 
     # Computed points for members
     self._compiled_member_points: dict["Lineage", tuple[list[complex], list[complex]]] = {}
-    self._compiled_member_samples: dict["Lineage", list[tuple[float, complex, complex]]] = {}
+    self._compiled_member_samples: dict["Lineage", list[CompiledRibbonSample]] = {}
 
   @property
   def end_x(self) -> float:
@@ -125,6 +128,14 @@ class Bundle(ShiftablePath):
       to_x   = to_x,
       to_y   = to_y,
     ))
+
+  def join_region(self, region: "Region", x: float) -> "RegionMembership":
+    """Join a post-layout Region without changing bundle layout."""
+    return region.join(self, x)
+
+  def leave_region(self, region: "Region", x: float) -> None:
+    """Leave a post-layout Region without changing bundle layout."""
+    region.leave(self, x)
 
   def reserve_member(
       self,
@@ -290,34 +301,79 @@ class Bundle(ShiftablePath):
 
     # Sample uniformly and exactly at every authored event boundary.
     sample_ts = set(np.linspace(0, 1, self.diagram.resolution))
+    authored_samples = []
     for event_x in diagram_event_xs(self.diagram):
       if self.start_x <= event_x <= self.end_x:
-        sample_ts.add(find_t_at_x(baseline_path, event_x))
+        event_t = find_t_at_x(baseline_path, event_x)
+        sample_ts.add(event_t)
+        authored_samples.append((event_t, event_x))
+    scale_step_xs = {
+      event.from_x
+      for membership in self._memberships
+      for event in membership.lineage._scale_events
+      if event.from_x == event.to_x
+    }
+    position_step_xs = {
+      event.from_x for event in self._shift_events
+      if event.from_x == event.to_x
+    }
+    reorder_step_xs = {
+      event.from_x for event in self._reorder_events
+      if event.from_x == event.to_x
+    }
+    processed_position_steps = set()
+
+    def append_layout_sample(source_x, point, normal, query_x, side):
+      memberships, offsets, width_by_lineage = self._layout_at(query_x)
+      for membership in memberships:
+        member_width = width_by_lineage[membership.lineage]
+        center_offset = offsets[membership.lineage]
+        upper_point = point + normal * (center_offset + member_width / 2)
+        lower_point = point + normal * (center_offset - member_width / 2)
+        self._compiled_member_points[membership.lineage][0].append(upper_point)
+        self._compiled_member_points[membership.lineage][1].append(lower_point)
+        self._compiled_member_samples[membership.lineage].append(
+          CompiledRibbonSample(source_x, upper_point, lower_point, side)
+        )
+
     for t in sorted(sample_ts):
       # Get parameters at this position alongside the path
       point  = baseline_path.point(t)
       normal = baseline_path.normal(t)
-      x      = point.real
+      x = next((event_x for event_t, event_x in authored_samples if t == event_t), point.real)
 
-      memberships, offsets, width_by_lineage = self._layout_at(x)
-      if not memberships: continue
+      position_step_x = next((
+        event_x for event_x in position_step_xs
+        if abs(point.real - event_x) <= 1e-9
+      ), None)
+      if position_step_x is not None:
+        if position_step_x in processed_position_steps:
+          continue
+        processed_position_steps.add(position_step_x)
+        for side, query_x in (
+            (BoundarySide.LEFT, position_step_x - 2e-5),
+            (BoundarySide.RIGHT, position_step_x + 2e-5),
+          ):
+          query_t = find_t_at_x(baseline_path, query_x)
+          query_point = baseline_path.point(query_t)
+          query_point = complex(position_step_x, query_point.imag)
+          append_layout_sample(
+            position_step_x,
+            query_point,
+            baseline_path.normal(query_t),
+            query_x,
+            side,
+          )
+        continue
 
-      # Iterate over members in order
-      for membership in memberships:
-        member_width = width_by_lineage[membership.lineage]
-        center_offset = offsets[membership.lineage]
-        # Offset lines of this member
-        upper_offset = center_offset + member_width / 2
-        lower_offset = center_offset - member_width / 2
-
-        # Compute the points of the upper and lower edges of the path
-        upper_point = point + normal * upper_offset
-        lower_point = point + normal * lower_offset
-
-        # ToDo reimplement back-filtering here
-        self._compiled_member_points[membership.lineage][0].append(upper_point)
-        self._compiled_member_points[membership.lineage][1].append(lower_point)
-        self._compiled_member_samples[membership.lineage].append((x, upper_point, lower_point))
+      queries = [(x, BoundarySide.RIGHT)]
+      if any(abs(x - event_x) <= 1e-9 for event_x in scale_step_xs | reorder_step_xs):
+        queries = [
+          (x - 2e-5, BoundarySide.LEFT),
+          (x + 2e-5, BoundarySide.RIGHT),
+        ]
+      for query_x, side in queries:
+        append_layout_sample(x, point, normal, query_x, side)
 
 
   def _get_member_geometry_at(self, x:float, lineage:"Lineage") -> tuple[complex,complex]:
@@ -358,29 +414,32 @@ class Bundle(ShiftablePath):
       start_x: float,
       end_x:   float,
     ):
-    """Retrieve the pre-calculated points, filtered by X range."""
-    # ToDo investigate better system, perhaps storing points in membership structure
-    # Retrieve points for this lineage
-    if lineage not in self._compiled_member_points:
-      print("ERROR: No precompiled points this lineage in the bundle.")
-      return ([], [])
-    all_upper_points, all_lower_points = self._compiled_member_points[lineage]
+    samples = self.get_compiled_samples_for(lineage, start_x, end_x)
+    return [sample.upper for sample in samples], [sample.lower for sample in samples]
 
-    # Filter points within x range
-    # ToDo replace with bisect or numpy masking for performance
-    filtered_upper_points = [upper_point for upper_point in all_upper_points if start_x <= upper_point.real <= end_x]
-    filtered_lower_points = [lower_point for lower_point in all_lower_points if start_x <= lower_point.real <= end_x]
+  def get_compiled_samples_for(
+      self,
+      lineage: "Lineage",
+      start_x: float,
+      end_x: float,
+    ) -> list[CompiledRibbonSample]:
+    """Retrieve paired rendered samples by authoritative timeline X."""
+    if lineage not in self._compiled_member_samples:
+      print("ERROR: No precompiled points this lineage in the bundle.")
+      return []
+    samples = [
+      sample for sample in self._compiled_member_samples[lineage]
+      if start_x <= sample.source_x <= end_x
+    ]
 
     # Interpolate start if missing
-    if not filtered_upper_points or filtered_upper_points[0].real > start_x + 1e-5:
+    if not samples or samples[0].source_x > start_x + 1e-5:
       upper_point, lower_point = self._get_member_geometry_at(start_x, lineage)
-      filtered_upper_points.insert(0, upper_point)
-      filtered_lower_points.insert(0, lower_point)
+      samples.insert(0, CompiledRibbonSample(start_x, upper_point, lower_point, BoundarySide.RIGHT))
 
     # Interpolate end if missing
-    if not filtered_upper_points or filtered_upper_points[-1].real < end_x - 1e-5:
+    if not samples or samples[-1].source_x < end_x - 1e-5:
       upper_point, lower_point = self._get_member_geometry_at(end_x, lineage)
-      filtered_upper_points.append(upper_point)
-      filtered_lower_points.append(lower_point)
+      samples.append(CompiledRibbonSample(end_x, upper_point, lower_point, BoundarySide.LEFT))
 
-    return filtered_upper_points, filtered_lower_points
+    return samples

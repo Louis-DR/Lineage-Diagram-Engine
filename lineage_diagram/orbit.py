@@ -5,10 +5,13 @@ from typing import TYPE_CHECKING, Optional
 from .utils import smootherstep, find_t_at_x
 from .sampling import diagram_event_xs
 from .topology import AssemblyReservation, ReorderTransition, reservation_overlap_component
+from .layout import CompiledRibbonSample
+from .timeline import BoundarySide
 
 if TYPE_CHECKING:
     from .lineage import Lineage
     from .diagram import Diagram
+    from .region import Region, RegionMembership
 
 @dataclass
 class OrbitMembership:
@@ -38,7 +41,7 @@ class Orbit:
 
         # Computed points for members
         self._compiled_member_points: dict["Lineage",tuple[list[complex],list[complex]]] = {}
-        self._compiled_member_samples: dict["Lineage",list[tuple[float,complex,complex]]] = {}
+        self._compiled_member_samples: dict["Lineage",list[CompiledRibbonSample]] = {}
 
     @property
     def memberships(self) -> list[OrbitMembership]:
@@ -69,6 +72,14 @@ class Orbit:
             fade_out_duration = 0.0
         )
         self._memberships.append(new_membership)
+
+    def join_region(self, region: "Region", x: float) -> "RegionMembership":
+        """Join a post-layout Region without changing orbit layout."""
+        return region.join(self, x)
+
+    def leave_region(self, region: "Region", x: float) -> None:
+        """Leave a post-layout Region without changing orbit layout."""
+        region.leave(self, x)
 
     def get_memberships_at(self, x:float) -> list[OrbitMembership]:
         """Return memberships active at X."""
@@ -226,34 +237,29 @@ class Orbit:
 
     def get_compiled_points_for(self, lineage:"Lineage", start_x:float, end_x:float) -> tuple[list[complex],list[complex]]:
         """Retrieve pre-calculated points."""
-        if lineage not in self._compiled_member_points:
-            return ([], [])
+        samples = self.get_compiled_samples_for(lineage, start_x, end_x)
+        return [sample.upper for sample in samples], [sample.lower for sample in samples]
 
-        all_upper, all_lower = self._compiled_member_points[lineage]
-
-        # Filter
-        # Optimization: assume sorted by x (real part)
-        filtered_upper = [p for p in all_upper if start_x <= p.real <= end_x]
-        filtered_lower = [p for p in all_lower if start_x <= p.real <= end_x]
-
-        # Interpolate ends (reuse logic from Bundle)
-        if not filtered_upper and all_upper:
-             # Check if range is within available points
-             pass
-
-        # Interpolate start if missing
-        if not filtered_upper or (filtered_upper and filtered_upper[0].real > start_x + 1e-5):
-            upper_point, lower_point = self._get_member_geometry_at(start_x, lineage)
-            filtered_upper.insert(0, upper_point)
-            filtered_lower.insert(0, lower_point)
-
-        # Interpolate end if missing
-        if not filtered_upper or (filtered_upper and filtered_upper[-1].real < end_x - 1e-5):
-            upper_point, lower_point = self._get_member_geometry_at(end_x, lineage)
-            filtered_upper.append(upper_point)
-            filtered_lower.append(lower_point)
-
-        return filtered_upper, filtered_lower
+    def get_compiled_samples_for(
+        self,
+        lineage:"Lineage",
+        start_x:float,
+        end_x:float,
+    ) -> list[CompiledRibbonSample]:
+        """Retrieve paired rendered samples by authoritative timeline X."""
+        if lineage not in self._compiled_member_samples:
+            return []
+        samples = [
+            sample for sample in self._compiled_member_samples[lineage]
+            if start_x <= sample.source_x <= end_x
+        ]
+        if not samples or samples[0].source_x > start_x + 1e-5:
+            upper, lower = self._get_member_geometry_at(start_x, lineage)
+            samples.insert(0, CompiledRibbonSample(start_x, upper, lower, BoundarySide.RIGHT))
+        if not samples or samples[-1].source_x < end_x - 1e-5:
+            upper, lower = self._get_member_geometry_at(end_x, lineage)
+            samples.append(CompiledRibbonSample(end_x, upper, lower, BoundarySide.LEFT))
+        return samples
 
     def solve_geometry(self):
         """Pre-calculate geometry."""
@@ -266,38 +272,47 @@ class Orbit:
 
         # We iterate X from 0 to width
         xs = sorted({*np.linspace(0, diagram.view_width, steps), *diagram_event_xs(diagram)})
+        discontinuity_xs = {
+            event.from_x
+            for lineage in (self.main_lineage, *(membership.lineage for membership in self._memberships))
+            for event in lineage._scale_events
+            if event.from_x == event.to_x
+        }
+        discontinuity_xs.update(
+            event.from_x for event in self.main_lineage._shift_events
+            if event.from_x == event.to_x
+        )
+        discontinuity_xs.update(
+            event.from_x for event in self._reorder_events
+            if event.from_x == event.to_x
+        )
 
         for x in xs:
-            memberships, offsets = self._layout_at(x)
-            if not memberships: continue
-
-            # Get main lineage geometry
-            main_upper, main_lower = self.main_lineage.get_geometry_at(x)
-
-            # Calculate center and normal
-            main_center = (main_upper + main_lower) / 2
-
-            diff = main_upper - main_lower
-            if abs(diff) < 1e-9:
-                # Zero width, use default normal (0, 1)
-                normal = 1j
-            else:
-                normal = diff / abs(diff)
-
-            # Calculate offsets
-            for membership in memberships:
-                offset = offsets[membership.lineage]
-                width  = membership.lineage.get_width_at(x) * self._get_factor(membership, x)
-
-                # Center of satellite
-                center = main_center + normal * offset
-
-                upper = center + normal * (width / 2)
-                lower = center - normal * (width / 2)
-
-                self._compiled_member_points[membership.lineage][0].append(upper)
-                self._compiled_member_points[membership.lineage][1].append(lower)
-                self._compiled_member_samples[membership.lineage].append((x, upper, lower))
+            queries = [(x, BoundarySide.RIGHT)]
+            if any(abs(x - event_x) <= 1e-9 for event_x in discontinuity_xs):
+                queries = [
+                    (x - 2e-5, BoundarySide.LEFT),
+                    (x + 2e-5, BoundarySide.RIGHT),
+                ]
+            for query_x, side in queries:
+                memberships, offsets = self._layout_at(query_x)
+                if not memberships:
+                    continue
+                main_upper, main_lower = self.main_lineage.get_geometry_at(query_x)
+                main_center = (main_upper + main_lower) / 2
+                diff = main_upper - main_lower
+                normal = 1j if abs(diff) < 1e-9 else diff / abs(diff)
+                for membership in memberships:
+                    offset = offsets[membership.lineage]
+                    width = membership.lineage.get_width_at(query_x) * self._get_factor(membership, query_x)
+                    center = main_center + normal * offset
+                    upper = center + normal * (width / 2)
+                    lower = center - normal * (width / 2)
+                    self._compiled_member_points[membership.lineage][0].append(upper)
+                    self._compiled_member_points[membership.lineage][1].append(lower)
+                    self._compiled_member_samples[membership.lineage].append(
+                        CompiledRibbonSample(x, upper, lower, side)
+                    )
 
     def _get_member_geometry_at(self, x:float, lineage:"Lineage") -> tuple[complex,complex]:
         """Calculate the upper and lower points of a member at a specific X."""

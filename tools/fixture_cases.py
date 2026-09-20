@@ -445,8 +445,10 @@ def dynamic_region() -> EngineFixture:
     stroke=RegionStroke("#5b21b6", 1.25, 0.8, (5, 3)),
     hatch=RegionHatch("#5b21b6", 0.12, 1, 9, 35),
   )
-  region.add_member(upper, 30, 330)
-  region.add_member(lower, 120, 280)
+  upper.join_region(region, 30)
+  upper.leave_region(region, 330)
+  lower.join_region(region, 120)
+  lower.leave_region(region, 280)
   region.shade(210, 290, "#db2777")
   region.fade(230, 310, 0.08)
   return EngineFixture(

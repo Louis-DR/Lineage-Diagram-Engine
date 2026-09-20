@@ -2,10 +2,11 @@ from lineage_diagram.diagram import Diagram
 from lineage_diagram.lineage import Lineage
 from lineage_diagram.bundle  import Bundle
 from lineage_diagram.orbit   import Orbit
+from lineage_diagram.region  import Region, RegionHatch, RegionStroke
 
 diagram = Diagram(
     view_width  = 2000,
-    view_height = 1500,
+    view_height = 2000,
     resolution  = 1000,
     auto_color_transition     = True,
     lineage_stroke_width      = 0.5,
@@ -941,7 +942,7 @@ host_bundle_line_4, host_bundle_line_3 = host_bundle_merged_line_3.split(
 
 
 # -----------------------------------------------------------------------------
-# 9. Merge and split to/from bundle
+# 10. Merge and split to/from bundle
 # -----------------------------------------------------------------------------
 
 host_bundle = Bundle(diagram, start_x=0, start_y=1000, margin=3)
@@ -1203,7 +1204,7 @@ host_bundle_line_2.join(from_x=1800, to_x=1850, to_assembly=host_bundle, index=2
 
 
 # -----------------------------------------------------------------------------
-# 10. Orbit
+# 11. Orbit
 # -----------------------------------------------------------------------------
 
 main_line = Lineage(
@@ -1345,7 +1346,7 @@ satellite_line_3, satellite_line_4 = satellite_merged_line_2.split(
 
 
 # -----------------------------------------------------------------------------
-# 11. Color shading
+# 12. Color shading
 # -----------------------------------------------------------------------------
 
 line_color = Lineage(
@@ -1378,7 +1379,7 @@ line_color.shade(   from_x=1900, to_x=1950, color=color_white)
 
 
 # -----------------------------------------------------------------------------
-# 12. Transferring between assemblies
+# 13. Transferring between assemblies
 # -----------------------------------------------------------------------------
 
 orbit_line = Lineage(
@@ -1440,34 +1441,97 @@ satellite_line_3.reorder(from_x=100, to_x=150, in_assembly=bundle, new_index=2)
 
 
 # -----------------------------------------------------------------------------
-# Trial
+# 14. Region
 # -----------------------------------------------------------------------------
 
-trial_line_1 = Lineage(
+example_14_y = 1500
+
+line_1 = Lineage(
     diagram = diagram,
     color   = color_blue,
     start_x = 0,
-    start_y = 1450,
-    start_w = 5,
+    start_y = example_14_y-30,
+    start_w = 5
+)
+line_2 = Lineage(
+    diagram = diagram,
+    color   = color_red,
+    start_x = 0,
+    start_y = example_14_y-10,
+    start_w = 5
+)
+line_3 = Lineage(
+    diagram = diagram,
+    color   = color_green,
+    start_x = 0,
+    start_y = example_14_y+10,
+    start_w = 5
+)
+line_4 = Lineage(
+    diagram = diagram,
+    color   = color_yellow,
+    start_x = 0,
+    start_y = example_14_y+30,
+    start_w = 5
 )
 
-trial_line_1.shift_to(from_x=100, to_x=200, to_y=1420)
-trial_line_2 = Lineage.create_from_lineage(
-    parent          = trial_line_1,
-    start_x         = 100,
-    transition_to_x = 200,
-    new_color       = color_red,
-    new_target_w    = 5,
-    new_target_y    = 1480,
+region = Region(
+  diagram,
+  padding             = 5,
+  fill                = color_white,
+  fill_opacity        = 0.5,
+  corner_radius       = 10,
+  event_corner_radius = 25,
+  stroke              = RegionStroke (color_black, opacity=0.5, width=2, dasharray=(6, 3)),
+  hatch               = RegionHatch  (color_black, opacity=0.1, width=8, spacing=8, angle=45),
 )
+region.join(target=line_1, at_x=100)
+region.join(target=line_2, at_x=150)
+region.join(target=line_3, at_x=200)
+region.join(target=line_4, at_x=250)
 
-trial_line_1.shift_to(from_x=300, to_x=400, to_y=1450)
-trial_line_2.merge_into(
-    target_lineage = trial_line_1,
-    merge_from_x   = 300,
-    end_x          = 400,
-    target_w       = 5,
-)
+region.leave(target=line_1, at_x=300)
+region.leave(target=line_2, at_x=350)
+region.leave(target=line_3, at_x=400)
+region.leave(target=line_4, at_x=450)
+
+region.join(target=line_1, at_x=500)
+region.join(target=line_2, at_x=500)
+region.join(target=line_3, at_x=500)
+region.join(target=line_4, at_x=500)
+
+line_2.shift_to(from_x=550, to_x=600, to_y=example_14_y-20)
+line_3.shift_to(from_x=550, to_x=600, to_y=example_14_y-10)
+line_4.shift_to(from_x=550, to_x=600, to_y=example_14_y)
+
+line_4.shift_to(from_x=650, to_x=700, to_y=example_14_y+15)
+line_3.shift_to(from_x=655, to_x=705, to_y=example_14_y+5)
+line_2.shift_to(from_x=660, to_x=710, to_y=example_14_y-5)
+line_1.shift_to(from_x=665, to_x=715, to_y=example_14_y-15)
+
+line_1.shift_to(from_x=750, to_x=800, to_y=example_14_y+30)
+line_2.shift_to(from_x=750, to_x=800, to_y=example_14_y+20)
+
+line_4.shift_to(from_x=800, to_x=850, to_y=example_14_y-30)
+line_3.shift_to(from_x=800, to_x=850, to_y=example_14_y-20)
+
+line_2.shift_to(from_x=875, to_x=900, to_y=example_14_y+5)
+line_3.shift_to(from_x=875, to_x=900, to_y=example_14_y-5)
+
+line_1.scale_to(from_x=900, to_x=970, to_w=30)
+line_4.scale_to(from_x=900, to_x=970, to_w=30)
+
+line_1.scale_to(from_x=980, to_x=990, to_w=5)
+line_4.scale_to(from_x=980, to_x=990, to_w=5)
+
+line_1.scale_to(from_x=1010, to_x=1020, to_w=30)
+line_4.scale_to(from_x=1010, to_x=1020, to_w=30)
+
+line_1.scale_to(from_x=1030, to_x=1100, to_w=5)
+line_4.scale_to(from_x=1030, to_x=1100, to_w=5)
+
+# region.shade(300, 360, "#db2777")
+# region.fade(300, 360, 0.08)
 
 
 

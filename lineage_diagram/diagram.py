@@ -35,6 +35,8 @@ class Diagram:
   ):
     if not math.isfinite(color_transition_duration) or not 0.0 <= color_transition_duration <= 1.0:
       raise ValueError("color_transition_duration must be a finite fraction between 0 and 1")
+    if not math.isfinite(lineage_stroke_width) or lineage_stroke_width < 0:
+      raise ValueError("lineage_stroke_width must be finite and nonnegative")
     self.view_width  = view_width
     self.view_height = view_height
     self.resolution  = resolution
@@ -149,6 +151,9 @@ class Diagram:
         if lineage in orbits_by_main:
             for orbit in orbits_by_main[lineage]:
                 orbit.solve_geometry()
+
+    for lineage in solve_order_lineages:
+        lineage.compile_geometry()
 
     self.last_geometry_report = validate_compiled_geometry(self, self.curvature_policy)
     if self.curvature_policy.mode == "reject" and not self.last_geometry_report.is_safe:

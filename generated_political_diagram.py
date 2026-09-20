@@ -6,28 +6,28 @@ from lineage_diagram.bundle import Bundle
 from lineage_diagram.orbit import Orbit
 from lineage_diagram.paths import MembershipEventType
 
-DIAGRAM_WIDTH  = 12975.0
-DIAGRAM_HEIGHT = 635
-YEAR_GRID_INTERVAL_YEARS = 5
-YEAR_GRID_COLOR = '#000000'
-YEAR_GRID_OPACITY = 0.06
-YEAR_GRID_STROKE_WIDTH = 2
+DIAGRAM_WIDTH               = 12975.0
+DIAGRAM_HEIGHT              = 635
+YEAR_GRID_INTERVAL_YEARS    = 5
+YEAR_GRID_COLOR             = '#000000'
+YEAR_GRID_OPACITY           = 0.06
+YEAR_GRID_STROKE_WIDTH      = 2
 YEAR_LABEL_ROTATION_DEGREES = -90
-YEAR_LABEL_FONT_SIZE = '10px'
-YEAR_LABEL_OPACITY = 0.12
-YEAR_LABEL_FONT_FAMILY = 'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif'
-YEAR_LABEL_FONT_WEIGHT = '900'
-YEAR_LABEL_X_OFFSET_PX = 0
-YEAR_LABEL_Y_OFFSET_PX = 10
-YEAR_LABEL_Y_SPACING_PX = 150
-YEAR_LABEL_MARGIN_PX = 8
-YEAR_LABEL_FONT_SIZE_PX = 10
-YEAR_LABEL_CHAR_WIDTH_PX = 6.5
-YEAR_LABEL_BG_COLOR = '#FFFFFF'
-YEAR_LABEL_BG_OPACITY = 0.95
-YEAR_LABEL_BG_PADDING_PX = 3
-YEAR_LABEL_BG_RADIUS_PX = 2
-DIAGRAM_START_DATE_YEAR = 1789
+YEAR_LABEL_FONT_SIZE        = '10px'
+YEAR_LABEL_OPACITY          = 0.12
+YEAR_LABEL_FONT_FAMILY      = 'system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial, sans-serif'
+YEAR_LABEL_FONT_WEIGHT      = '900'
+YEAR_LABEL_X_OFFSET_PX      = 0
+YEAR_LABEL_Y_OFFSET_PX      = 10
+YEAR_LABEL_Y_SPACING_PX     = 150
+YEAR_LABEL_MARGIN_PX        = 8
+YEAR_LABEL_FONT_SIZE_PX     = 10
+YEAR_LABEL_CHAR_WIDTH_PX    = 6.5
+YEAR_LABEL_BG_COLOR         = '#FFFFFF'
+YEAR_LABEL_BG_OPACITY       = 0.95
+YEAR_LABEL_BG_PADDING_PX    = 3
+YEAR_LABEL_BG_RADIUS_PX     = 2
+DIAGRAM_START_DATE_YEAR     = 1789
 
 class PoliticalDiagram(Diagram):
     def __init__(self, view_width: float, view_height: float, resolution: int = 1000):
@@ -150,12 +150,12 @@ lineage_UGCS_1 = Lineage(diagram, '#FF0000', 9722.699999999999, 247.5, 2.0, z=2.
 lineage_UGCS_1.terminate_at(9864.6)
 lineage_RN_1 = Lineage(diagram, '#8A5928', 10038.3, 587.5, 6.0, z=23.542727774125648)
 lineage_RN_1.terminate_at(12950.85)
-lineage_MÉP_1 = Lineage(diagram, '#66C52C', 10153.05, 284.5, 2.0, z=2.0)
-lineage_MÉP_1.terminate_at(10658.25)
+lineage_Mï¿½P_1 = Lineage(diagram, '#66C52C', 10153.05, 284.5, 2.0, z=2.0)
+lineage_Mï¿½P_1.terminate_at(10658.25)
 lineage_RPF_1 = Lineage(diagram, '#021A6F', 10266.6, 462.5, 6.0, z=38.97415848921294)
 lineage_RPF_1.terminate_at(11657.1)
-lineage_CÉ_1 = Lineage(diagram, '#66C52C', 10291.8, 290.5, 2.0, z=2.0)
-lineage_CÉ_1.terminate_at(10658.25)
+lineage_Cï¿½_1 = Lineage(diagram, '#66C52C', 10291.8, 290.5, 2.0, z=2.0)
+lineage_Cï¿½_1.terminate_at(10658.25)
 lineage_NUDF_1 = Lineage(diagram, '#F07400', 11470.949999999999, 357.5, 6.0, z=10.343742151857231)
 lineage_NUDF_1.terminate_at(11933.55)
 lineage_RE_1 = Lineage(diagram, '#FFD600', 12421.65, 357.5, 6.0, z=42.37344288017236)
@@ -339,9 +339,9 @@ lineage_PCF_1.shift_to(10489.8, 10654.05, 137.5)
 lineage_PRG-1971_1.shift_to(10489.8, 10654.05, 277.5)
 lineage_RN_1.shift_to(10544.55, 10763.699999999999, 582.5)
 lineage_PS_1.shift_to(10599.3, 10654.05, 247.5)
-lineage_LÉ_1 = Lineage.create_from_merge(diagram, '#66C52C', 10634.25, 10658.25, 287.5, 6.0, [lineage_MÉP_1, lineage_CÉ_1], z=6.0)
+lineage_Lï¿½_1 = Lineage.create_from_merge(diagram, '#66C52C', 10634.25, 10658.25, 287.5, 6.0, [lineage_Mï¿½P_1, lineage_Cï¿½_1], z=6.0)
 lineage_PCF_1.shift_to(11037.6, 11366.4, 187.5)
-lineage_LÉ_1.shift_to(11202.0, 11256.75, 227.5)
+lineage_Lï¿½_1.shift_to(11202.0, 11256.75, 227.5)
 lineage_PS_1.shift_to(11256.75, 11366.4, 267.5)
 lineage_PRG-1971_1.shift_to(11256.75, 11366.4, 297.5)
 lineage_LR_1 = Lineage.create_from_merge(diagram, '#0045B0', 11633.1, 11657.1, 462.5, 20.931215323014403, [lineage_RPF_1], z=52.309675959942126)
@@ -357,7 +357,7 @@ lineage_LFI_1.shift_to(12352.5, 12516.9, 167.5)
 lineage_PRAD_2.shift_to(12462.15, 12513.449999999999, 417.5)
 lineage_PS_1.shift_to(12462.15, 12736.05, 257.5)
 lineage_LR_1.shift_to(12487.35, 12761.4, 512.5)
-lineage_G·s_1 = Lineage.create_from_lineage(lineage_PS_1, 12489.3, 12513.3, '#D9185D', 3.0, 237.5, z=3.0, new_in_bundle=None, new_index=-1)
+lineage_Gï¿½s_1 = Lineage.create_from_lineage(lineage_PS_1, 12489.3, 12513.3, '#D9185D', 3.0, 237.5, z=3.0, new_in_bundle=None, new_index=-1)
 lineage_GDS_1 = Lineage.create_from_lineage(lineage_PS_1, 12510.75, 12534.75, '#EE3437', 2.0, 187.5, z=2.0, new_in_bundle=None, new_index=-1)
 lineage_Agir_1 = Lineage.create_from_lineage(lineage_LR_1, 12511.5, 12535.5, '#43519E', 3.0, 469.5, z=3.0, new_in_bundle=None, new_index=-1)
 lineage_PRAD_3 = Lineage.create_from_merge(diagram, '#C71982', 12489.449999999999, 12513.449999999999, 417.5, 3.2459833622183707, [lineage_PRG-1971_1, lineage_PRAD_2], z=42.397749152542374)
@@ -420,9 +420,9 @@ lineage_CIR_1.terminate_at(9966.3)
 lineage_UCRG_1.terminate_at(9864.6)
 lineage_UGCS_1.terminate_at(9864.6)
 lineage_PRG-1971_1.terminate_at(12513.449999999999)
-lineage_MÉP_1.terminate_at(10658.25)
+lineage_Mï¿½P_1.terminate_at(10658.25)
 lineage_RPF_1.terminate_at(11657.1)
-lineage_CÉ_1.terminate_at(10658.25)
+lineage_Cï¿½_1.terminate_at(10658.25)
 lineage_NUDF_1.terminate_at(11933.55)
 lineage_GDS_1.terminate_at(12905.1)
 lineage_CSDR_1.join(12777.6, 12801.6, bundle_CONV_FED, 0)
@@ -430,7 +430,7 @@ lineage_FP_1.join(12899.1, 12923.1, bundle_CONV_FED, 1)
 lineage_PRG-2019_1.join(12771.449999999999, 12795.449999999999, bundle_CONV_FED, 1)
 lineage_EC_1.join(12889.949999999999, 12913.949999999999, bundle_CONV_FED, 1)
 lineage_RI_1.join(10306.05, 10330.05, bundle_UDF, 0)
-lineage_G·s_1.join(12646.35, 12670.35, var_3, -1)
+lineage_Gï¿½s_1.join(12646.35, 12670.35, var_3, -1)
 lineage_PRAD_2.join(11645.1, 11669.1, var_4, 1)
 lineage_PRAD_2.leave(12141.3, 12165.3, var_4, 367.5)
 lineage_TdP_1.join(12762.9, 12786.9, var_5, 1)

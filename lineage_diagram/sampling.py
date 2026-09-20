@@ -25,4 +25,7 @@ def diagram_event_xs(diagram: "Diagram") -> tuple[float, ...]:
       values.add(float(membership.end_x))
       values.add(float(membership.start_x + membership.fade_in_duration))
       values.add(float(membership.end_x - membership.fade_out_duration))
+    for event in (*assembly._reservations, *assembly._reorder_events):
+      values.add(float(event.start_x if hasattr(event, "start_x") else event.from_x))
+      values.add(float(event.end_x if hasattr(event, "end_x") else event.to_x))
   return tuple(sorted(value for value in values if 0 <= value <= diagram.view_width))
